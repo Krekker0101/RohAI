@@ -1,0 +1,43 @@
+# Созданные файлы
+
+Исходники, конфигурация и документация; без .venv и кэшей.
+
+- `.dockerignore`
+- `.gitignore`
+- `README.md`
+- `apps/backend/src/smart_traffic_backend/__init__.py`
+- `apps/backend/src/smart_traffic_backend/config.py`
+- `apps/backend/src/smart_traffic_backend/hardware.py`
+- `apps/backend/src/smart_traffic_backend/main.py`
+- `apps/backend/src/smart_traffic_backend/runtime.py`
+- `apps/dashboard/README.md`
+- `apps/esp32/README.md`
+- `configs/simulation.env.example`
+- `datasets/README.md`
+- `docker/Dockerfile`
+- `docs/architecture.md`
+- `docs/files.md`
+- `docs/verification.md`
+- `packages/simulator/src/traffic_simulator/__init__.py`
+- `packages/simulator/src/traffic_simulator/comparison.py`
+- `packages/simulator/src/traffic_simulator/engine.py`
+- `packages/simulator/src/traffic_simulator/simulator.py`
+- `packages/traffic_core/src/traffic_core/__init__.py`
+- `packages/traffic_core/src/traffic_core/controller.py`
+- `packages/traffic_core/src/traffic_core/models.py`
+- `packages/traffic_core/src/traffic_core/ports.py`
+- `packages/traffic_core/src/traffic_core/safety.py`
+- `packages/traffic_core/src/traffic_core/settings.py`
+- `packages/traffic_core/src/traffic_core/state.py`
+- `packages/vision/src/traffic_vision/__init__.py`
+- `packages/vision/src/traffic_vision/contracts.py`
+- `pyproject.toml`
+- `recordings/README.md`
+- `scripts/check.ps1`
+- `scripts/compare.py`
+- `tests/test_api.py`
+- `tests/test_config.py`
+- `tests/test_metrics.py`
+- `tests/test_safety.py`
+- `tests/test_simulation.py`
+- `uv.lock`
