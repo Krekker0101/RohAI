@@ -6,9 +6,10 @@ from contextlib import asynccontextmanager, suppress
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import Field
-from traffic_core.models import Direction, Model, Telemetry, phase_for
+from traffic_core.models import Direction, Model, Policy, Telemetry, phase_for
 from traffic_core.ports import HardwareController
 from traffic_simulator.comparison import ComparisonRequest, ComparisonResult, compare
 from traffic_vision.geometry import GeometryStore, IntersectionGeometry
@@ -28,6 +29,22 @@ class EmergencyRequest(Model):
 class EmergencyResponse(Model):
     status: str
     expires_at_simulation_seconds: float
+
+
+class PolicyRequest(Model):
+    policy: Policy
+
+
+class SystemInfo(Model):
+    mode: str
+    policy: Policy
+    hardware: str
+    operator_auth_required: bool
+    source: str
+    source_id: str
+    stale_after_seconds: float
+    yellow_seconds: float
+    all_red_seconds: float
 
 
 def get_runtime(request: Request) -> Runtime | VisionRuntime:
@@ -72,6 +89,41 @@ def create_app(
             await runtime.stop()
 
     app = FastAPI(title="Smart Traffic AI", version="0.1.0", lifespan=lifespan)
+
+    @app.get("/", include_in_schema=False)
+    def dashboard_redirect() -> RedirectResponse:
+        return RedirectResponse("/dashboard/")
+
+    @app.get("/api/v1/system", response_model=SystemInfo, tags=["system"])
+    async def system_info(runtime: RuntimeDep) -> SystemInfo:
+        return SystemInfo(
+            mode=config.mode,
+            policy=(
+                runtime.engine.controller.policy
+                if isinstance(runtime, Runtime)
+                else runtime.engine.policy.policy
+            ),
+            hardware=type(runtime.hardware).__name__,
+            operator_auth_required=config.operator_token is not None,
+            source="simulator" if config.mode == "simulation" else config.vision.source,
+            source_id="simulation" if config.mode == "simulation" else config.vision.source_id,
+            stale_after_seconds=config.stale_after_seconds,
+            yellow_seconds=config.timing.yellow_seconds,
+            all_red_seconds=config.timing.all_red_seconds,
+        )
+
+    @app.put("/api/v1/control/policy", dependencies=[Depends(require_operator)], tags=["control"])
+    async def set_policy(body: PolicyRequest, runtime: RuntimeDep) -> dict[str, str]:
+        if config.mode == "calibration":
+            raise HTTPException(status_code=409, detail="Control is disabled during calibration")
+        if not runtime.ready:
+            raise HTTPException(status_code=503, detail="Controller is not ready")
+        # The next decision uses this policy; the independent safety machine keeps its phase.
+        if isinstance(runtime, Runtime):
+            runtime.engine.controller.policy = body.policy
+        else:
+            runtime.engine.policy.policy = body.policy
+        return {"status": "accepted", "policy": body.policy}
 
     @app.get("/health/live", tags=["health"])
     def live() -> dict[str, str]:
@@ -228,6 +280,13 @@ def create_app(
             )
         GeometryStore(config.vision.calibration_directory).save(body)
         return {"status": "saved", "applies_on": "pipeline_restart"}
+
+    if config.dashboard_directory.is_dir():
+        app.mount(
+            "/dashboard",
+            StaticFiles(directory=config.dashboard_directory, html=True),
+            name="dashboard",
+        )
 
     return app
 

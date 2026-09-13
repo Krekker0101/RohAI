@@ -139,6 +139,9 @@ def test_vision_api_calibration_and_eof_all_red(tmp_path: Path) -> None:
     with TestClient(app) as client:
         wait_until(lambda: client.get("/health/ready").status_code == 200)
         assert client.get("/api/v1/vision/frame.jpg").content.startswith(b"\xff\xd8")
+        assert client.get("/api/v1/system").json()["mode"] == "vision"
+        assert client.put("/api/v1/control/policy", json={"policy": "fixed"}).status_code == 200
+        assert client.get("/api/v1/system").json()["policy"] == "fixed"
         state = client.get("/api/v1/vision/state").json()
         assert set(state["directions"]) == {"north", "south", "east", "west"}
         with client.websocket_connect("/ws/telemetry") as socket:
@@ -176,6 +179,8 @@ def test_calibration_saves_geometry_and_never_enables_green(tmp_path: Path) -> N
         assert response.status_code == 200
         assert client.get("/api/v1/vision/geometry/demo").json() == geometry.model_dump(mode="json")
         assert client.post("/api/v1/emergency", json={"direction": "north"}).status_code == 409
+        assert client.get("/api/v1/system").json()["mode"] == "calibration"
+        assert client.put("/api/v1/control/policy", json={"policy": "fixed"}).status_code == 409
         assert hardware.last_signal.stage == SignalStage.ALL_RED
     assert hardware.closed
 
