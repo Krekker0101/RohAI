@@ -1,10 +1,32 @@
 # Smart Traffic AI
 
-Рабочий первый этап интеллектуального управления перекрёстком: FastAPI backend,
+Прототип интеллектуального управления перекрёстком: FastAPI backend,
 детерминированная simulation, адаптивный и Fixed-Time контроллеры, отдельная
 safety state machine, emergency priority, realtime telemetry и сравнение KPI.
-Камера и ESP32 для запуска не нужны. YOLO-интеграция и Flutter UI в этот этап
-намеренно не входят; их границы и контракты подготовлены.
+Этап 2 добавляет YOLO26 + ByteTrack, webcam/file/RTSP/synthetic sources, геометрию,
+очереди и ожидание, калибровку и видео overlay. Камера и ESP32 для demo не нужны.
+Flutter UI и физический ESP32 adapter остаются следующими этапами.
+
+## Vision demo
+
+```powershell
+uv sync --locked --extra vision
+uv run --extra vision python scripts/fetch_vision_demo.py
+uv run --extra vision python -m traffic_vision.demo --frames 120
+```
+
+Результат: `recordings/vision-demo.mp4`, JPEG-превью, JSONL и JSON-отчёт.
+Для realtime backend скопируйте `configs/vision.env.example` в `.env` и запустите:
+
+```powershell
+uv run --extra vision uvicorn smart_traffic_backend.main:app --host 127.0.0.1 --port 8000 --workers 1
+```
+
+Видео с аналитикой: http://127.0.0.1:8000/api/v1/vision/stream.
+Статус: `/api/v1/vision/status`, normalized TrafficState: `/api/v1/vision/state`.
+После EOF готовность становится 503 и включается all-red; для повтора перезапустите backend.
+Настройка камер, ROI, единицы метрик, режим без модели и устройство потоков —
+[docs/VISION_ENGINE.md](docs/VISION_ENGINE.md).
 
 ## Запуск
 
@@ -55,8 +77,8 @@ apps/
 packages/
   traffic_core/src/traffic_core/     models, policy, safety, ports, timing
   simulator/src/traffic_simulator/   seeded queues, engine, paired benchmark
-  vision/src/traffic_vision/         typed tracking contracts
-configs/                            пример конфигурации
+  vision/src/traffic_vision/         sources, YOLO/ByteTrack, geometry, analytics, overlay, pipeline
+configs/                            simulation/vision/calibration env и camera ROI
 datasets/                           правила хранения датасетов
 recordings/                         локальные видео и результаты
 scripts/                            benchmark и проверки
@@ -69,7 +91,7 @@ docker/                             backend Dockerfile
 
 ```mermaid
 flowchart TD
-    Camera[Camera / Video / RTSP — следующий этап] --> Vision[YOLO26 Vision Engine]
+    Camera[Camera / Video / RTSP / Synthetic] --> Vision[YOLO26 Vision Engine]
     Vision --> Tracking[Multi-object Tracking]
     Tracking --> Geometry[Geometry / Lane Assignment]
     Geometry --> Builder[Traffic State Builder]
@@ -121,10 +143,10 @@ sequenceDiagram
 ## Проверки
 
 ```powershell
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy
-uv run pytest
+uv run --locked --extra vision ruff check .
+uv run --locked --extra vision ruff format --check .
+uv run --locked --extra vision mypy
+uv run --locked --extra vision pytest
 # Все проверки одной командой в PowerShell:
 ./scripts/check.ps1
 # Если локальная политика блокирует .ps1, только для отдельного процесса:
@@ -135,8 +157,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1
 запросы конфликтующих фаз, fault latch, детерминированность, сохранение числа
 объектов, пустой поток, HTTP/WS, авторизация, отказ hardware и graceful shutdown.
 
-Фактические результаты: **21 тест пройден**, Ruff и strict mypy без ошибок;
-benchmark seed 42 / 600 s показал **30.05%** снижения суммарного ожидания.
+Benchmark первого этапа seed 42 / 600 s показал **30.05%** снижения суммарного ожидания.
+Vision tests дополнительно проверяют polygon ROI, назначения, queue/wait, lifecycle,
+дубли, перегрузку, видеодекодер, EOF, калибровку и ошибки модели.
+Этап 2 проверен: **41 тест**, strict mypy и Ruff; настоящий YOLO26 + ByteTrack обработал
+два полных ролика — **1024 кадра**. Подробности и ограничения —
+[docs/VISION_VERIFICATION.md](docs/VISION_VERIFICATION.md).
 Окружение, подробные KPI и ограничения проверки — [docs/verification.md](docs/verification.md).
 
 Docker (опционально): `docker build -f docker/Dockerfile -t smart-traffic-ai .`,
@@ -147,16 +173,17 @@ Docker (опционально): `docker build -f docker/Dockerfile -t smart-tra
 
 1. **Готово:** domain, config, backend, health, simulation, safe control, emergency,
    paired comparison, telemetry, тесты и документация.
-2. **Vision:** OpenCV webcam/file/RTSP, проверить пакет и веса YOLO26, ByteTrack,
-   полигоны подходов, stop-line, stationary detection, identity lifecycle,
-   оценка precision/recall и ошибки очереди на размеченных роликах.
+2. **Vision реализован:** OpenCV webcam/file/RTSP/synthetic, YOLO26 + ByteTrack,
+   полигоны подходов, stop line, stationary detection, identity lifecycle, очереди,
+   ожидание, bounded pipeline, overlay и backend calibration.
+   Следующая оценка качества: precision/recall, ID switches и ошибка очереди на размеченных роликах.
 3. **Flutter:** Material 3 desktop/tablet, схема перекрёстка, realtime графики,
    сравнение KPI, состояние подключения, операторские действия вне widgets.
 4. **ESP32:** USB Serial adapter, ACK, heartbeat/watchdog, безопасная прошивка,
    hardware-in-the-loop и независимые проверки запрещённых комбинаций.
 5. **Демо:** несколько сценариев и seeds, видео replay, SQLite run history,
    экспорт отчёта, пассажирские KPI, сравнение доверительных интервалов.
-6. **Развитие:** PostgreSQL, Wi-Fi/MQTT adapter, калибровка геометрии, turning
+6. **Развитие:** PostgreSQL, Wi-Fi/MQTT adapter, визуальный редактор ROI и homography, turning
    movements и расширенная conflict matrix после проверки safety-инвариантов.
 
 Этап предназначен для демонстрационного макета. Тайминги и модель движения

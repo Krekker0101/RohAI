@@ -6,16 +6,20 @@
 импортирует FastAPI, simulator, OpenCV или аппаратные библиотеки. `traffic_simulator`
 реализует TrafficStateSource и application use case для simulation.
 Backend создаёт объекты через constructor injection и отвечает за lifecycle,
-HTTP, WebSocket, мониторинг и вызов HardwareController. `traffic_vision` содержит
-контракт наблюдений для следующего этапа: source → tracker → geometry → state builder.
+HTTP, WebSocket, мониторинг и вызов HardwareController. `traffic_vision` реализует
+source → YOLO26/ByteTrack → geometry → state builder → overlay/publishing.
+Четыре worker threads связаны очередями ёмкостью один кадр; подробности —
+[VISION_ENGINE.md](VISION_ENGINE.md).
 
 Общий расчёт counts, Traffic Score, ожидания и congestion находится в
-`traffic_core/state.py`; simulator передаёт ему наблюдения очереди. Будущий vision
-adapter сможет использовать ту же функцию после назначения подхода и определения
+`traffic_core/state.py`; simulator передаёт ему наблюдения очереди. Vision
+adapter использует ту же функцию после назначения подхода и определения
 остановившихся объектов, не дублируя правила Traffic Score в YOLO wrapper.
 
 Установка общая через корневой pyproject, четыре отдельных Python namespace.
 Это модульная монорепа, без сети между внутренними слоями и без тяжёлого DI.
+VisionRuntime управляет наблюдаемым состоянием по отдельным монотонным часам;
+Simulation Runtime сохраняет прежний детерминированный путь и KPI benchmark.
 
 ## Safety и допустимая геометрия
 

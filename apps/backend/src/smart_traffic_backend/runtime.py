@@ -2,6 +2,7 @@ import asyncio
 import logging
 import threading
 import time
+from collections.abc import AsyncGenerator
 from contextlib import suppress
 
 from traffic_core.models import SignalState, Telemetry
@@ -79,6 +80,16 @@ class Runtime:
             if queue.full():
                 queue.get_nowait()
             queue.put_nowait(self.latest)
+
+    async def stream(self) -> AsyncGenerator[Telemetry, None]:
+        queue: asyncio.Queue[Telemetry] = asyncio.Queue(maxsize=1)
+        self.subscribers.add(queue)
+        queue.put_nowait(self.latest)
+        try:
+            while True:
+                yield await queue.get()
+        finally:
+            self.subscribers.discard(queue)
 
     async def _all_red(self) -> None:
         signal = self.engine.safety.fail_safe(self.engine.simulator.now)

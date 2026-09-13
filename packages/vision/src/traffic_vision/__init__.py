@@ -1,1 +1,1 @@
-"""Vision boundary contracts. Detector integrations belong in a later milestone."""
+"""Road analytics with isolated capture, detection, tracking, analysis and publishing."""
