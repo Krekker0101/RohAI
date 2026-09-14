@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { VideoOff } from 'lucide-react';
+import { backendUrl } from '../data/backend';
+import { runtimePath } from '../data/source';
 
 export function VideoFeed({ active }: { active: boolean }) {
   const image = useRef<HTMLImageElement>(null);
@@ -12,7 +14,7 @@ export function VideoFeed({ active }: { active: boolean }) {
     async function next() {
       try {
         if (!document.hidden) {
-          const response = await fetch('/api/v1/vision/frame.jpg', { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(3000)]) });
+          const response = await fetch(backendUrl(runtimePath('/api/v1/vision/frame.jpg')), { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(3000)]) });
           if (!response.ok) throw new Error('Frame unavailable');
           const blob = await response.blob();
           if (controller.signal.aborted) return;

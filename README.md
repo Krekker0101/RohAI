@@ -1,11 +1,22 @@
 # Smart Traffic AI
 
+## Presentation Demo — готово к показу
+
+В проект встроены два полностью разделённых канала данных:
+
+- **DEMO** — выбран в Dashboard по умолчанию. Не требует камеры, видео или YOLO inference. Синтетические наблюдения и треки проходят через настоящий `SimulationEngine`, `TrafficController` и `SafetyController`; доступны схема, demo camera overlay, tracking, Fixed-Time/Smart AI и emergency priority. Demo runtime не имеет доступа к реальному hardware adapter.
+- **REAL** — обычный runtime backend: simulation, настоящий YOLO video/webcam/RTSP или calibration. Переключается кнопкой **DEMO / REAL** в верхней панели без изменения frontend-кода.
+
+На Windows для презентации достаточно запустить `START_DEMO.bat`. Подробный сценарий — [PRESENTATION_DEMO.md](PRESENTATION_DEMO.md). Для настоящего записанного видео используйте `START_REAL_VISION.bat` после добавления `recordings/car-detection.mp4`.
+
+Demo API: `/api/v1/demo/system`, `/api/v1/demo/state`, `/ws/demo/telemetry`, `/api/v1/demo/vision/frame.svg`. Обычные `/api/v1/*`, `/ws/telemetry` и Vision endpoints сохранены для REAL без подмены данных.
+
 Прототип интеллектуального управления перекрёстком: FastAPI backend,
 детерминированная simulation, адаптивный и Fixed-Time контроллеры, отдельная
 safety state machine, emergency priority, realtime telemetry и сравнение KPI.
 Этап 2 добавляет YOLO26 + ByteTrack, webcam/file/RTSP/synthetic sources, геометрию,
 очереди и ожидание, калибровку и видео overlay. Камера и ESP32 для demo не нужны.
-Flutter UI и физический ESP32 adapter остаются следующими этапами.
+React/Vite Dashboard реализован и подключён к FastAPI через REST + WebSocket. Физический ESP32 adapter остаётся следующим аппаратным этапом.
 
 ## Vision demo
 
@@ -72,7 +83,7 @@ POST `/api/v1/simulation/compare` принимает `{"duration_seconds":600,"s
 ```text
 apps/
   backend/src/smart_traffic_backend/  config, lifecycle, HTTP/WS, hardware mock
-  dashboard/                        контракт будущего Flutter Dashboard
+  dashboard/                        React 19 + Vite operator dashboard
   esp32/                            решение USB Serial и требования к firmware
 packages/
   traffic_core/src/traffic_core/     models, policy, safety, ports, timing
@@ -86,6 +97,22 @@ tests/                              unit, integration, deterministic tests
 docs/                               архитектура и ограничения модели
 docker/                             backend Dockerfile
 ```
+
+
+## Dashboard
+
+Frontend находится в `apps/dashboard`. По умолчанию production build обслуживается самим FastAPI по `/dashboard/`, поэтому REST, health и WebSocket используют один origin. Для отдельного frontend-хостинга backend можно задать через `VITE_API_BASE_URL` или прямо в окне «Подключение»; backend при этом должен разрешить точный origin через `STA_CORS_ORIGINS`.
+
+```powershell
+cd apps/dashboard
+npm ci
+npm run typecheck
+npm run lint
+npm test
+npm run build
+```
+
+Для dev-server используется proxy на `http://127.0.0.1:8000`. Другой адрес задаётся `VITE_DEV_BACKEND_URL`. Пример переменных — `apps/dashboard/.env.example`.
 
 ## Архитектура
 
@@ -105,7 +132,7 @@ flowchart TD
     Gateway -. следующий этап .-> ESP[USB Serial / ESP32 / LEDs]
     State --> API[FastAPI / WebSocket]
     Safety --> API
-    API -. следующий этап .-> Flutter[Flutter Dashboard]
+    API --> Dashboard[React Dashboard]
 ```
 
 Vision выдаёт наблюдения и TrafficState. Decision Engine предлагает фазу и
@@ -160,7 +187,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1
 Benchmark первого этапа seed 42 / 600 s показал **30.05%** снижения суммарного ожидания.
 Vision tests дополнительно проверяют polygon ROI, назначения, queue/wait, lifecycle,
 дубли, перегрузку, видеодекодер, EOF, калибровку и ошибки модели.
-Этап 2 проверен: **41 тест**, strict mypy и Ruff; настоящий YOLO26 + ByteTrack обработал
+Backend/Vision набор сейчас содержит **46 pytest-тестов**; ранее strict mypy и Ruff также использовались в verification. Настоящий YOLO26 + ByteTrack обработал
 два полных ролика — **1024 кадра**. Подробности и ограничения —
 [docs/VISION_VERIFICATION.md](docs/VISION_VERIFICATION.md).
 Окружение, подробные KPI и ограничения проверки — [docs/verification.md](docs/verification.md).
@@ -177,8 +204,7 @@ Docker (опционально): `docker build -f docker/Dockerfile -t smart-tra
    полигоны подходов, stop line, stationary detection, identity lifecycle, очереди,
    ожидание, bounded pipeline, overlay и backend calibration.
    Следующая оценка качества: precision/recall, ID switches и ошибка очереди на размеченных роликах.
-3. **Flutter:** Material 3 desktop/tablet, схема перекрёстка, realtime графики,
-   сравнение KPI, состояние подключения, операторские действия вне widgets.
+3. **Dashboard реализован:** React 19 + Vite, realtime WebSocket telemetry, схема перекрёстка, видео, KPI, AI vs Fixed-Time, ROI calibration, emergency control и настраиваемый backend URL.
 4. **ESP32:** USB Serial adapter, ACK, heartbeat/watchdog, безопасная прошивка,
    hardware-in-the-loop и независимые проверки запрещённых комбинаций.
 5. **Демо:** несколько сценариев и seeds, видео replay, SQLite run history,

@@ -115,7 +115,7 @@ class VideoFileSource(OpenCVSource):
         # A premature decode failure is distinguished from a normal end where metadata exists.
         assert self._capture is not None
         length = self._capture.get(cv2.CAP_PROP_FRAME_COUNT)
-        if length > 0 and self._frame_id + 1 < length:
+        if length > 0 and self._frame_id < length:
             raise OSError(f"Decode failure before EOF in source '{self.source_id}'")
         return None
 

@@ -46,6 +46,15 @@ def test_latest_slot_drops_old_work_and_drains_before_eof() -> None:
         slot.put(100)
 
 
+def test_video_file_source_rejects_decode_failure_before_reported_eof(tmp_path: Path) -> None:
+    source = VideoFileSource(tmp_path / "unused.mp4", "recording")
+    source._capture = SimpleNamespace(get=lambda _prop: 100)  # type: ignore[assignment]
+    source._frame_id = 99
+
+    with pytest.raises(OSError, match="Decode failure before EOF"):
+        source._on_read_failure()
+
+
 def test_synthetic_and_recorded_source_metadata_and_eof(tmp_path: Path) -> None:
     source = SyntheticSource(frames=5, fps=10)
     path = tmp_path / "fixture.avi"

@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager, suppress
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import Field
@@ -16,6 +17,7 @@ from traffic_vision.geometry import GeometryStore, IntersectionGeometry
 from traffic_vision.models import PipelineStatus, VisionTrafficState
 
 from smart_traffic_backend.config import Settings
+from smart_traffic_backend.demo_runtime import DEMO_SOURCE_ID, DemoRuntime
 from smart_traffic_backend.hardware import MockHardwareController
 from smart_traffic_backend.runtime import Runtime
 from smart_traffic_backend.vision_runtime import VisionRuntime, VisionTelemetry
@@ -45,6 +47,7 @@ class SystemInfo(Model):
     stale_after_seconds: float
     yellow_seconds: float
     all_red_seconds: float
+    demo: bool = False
 
 
 def get_runtime(request: Request) -> Runtime | VisionRuntime:
@@ -81,14 +84,27 @@ def create_app(
             if config.mode == "simulation"
             else VisionRuntime(config, adapter)
         )
+        demo_runtime = DemoRuntime(config)
         app.state.runtime = runtime
+        app.state.demo_runtime = demo_runtime
         try:
+            await demo_runtime.start()
             await runtime.start()
             yield
         finally:
             await runtime.stop()
+            await demo_runtime.stop()
 
     app = FastAPI(title="Smart Traffic AI", version="0.1.0", lifespan=lifespan)
+
+    if config.cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=list(config.cors_origins),
+            allow_credentials=False,
+            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            allow_headers=["Accept", "Content-Type", "X-Operator-Token"],
+        )
 
     @app.get("/", include_in_schema=False)
     def dashboard_redirect() -> RedirectResponse:
@@ -110,6 +126,99 @@ def create_app(
             stale_after_seconds=config.stale_after_seconds,
             yellow_seconds=config.timing.yellow_seconds,
             all_red_seconds=config.timing.all_red_seconds,
+            demo=False,
+        )
+
+    def get_demo(request: Request) -> DemoRuntime:
+        demo: DemoRuntime = request.app.state.demo_runtime
+        return demo
+
+    @app.get("/api/v1/demo/system", response_model=SystemInfo, tags=["demo"])
+    def demo_system(request: Request) -> SystemInfo:
+        demo = get_demo(request)
+        return SystemInfo(
+            mode="demo",
+            policy=demo.policy,
+            hardware="PresentationMockController",
+            operator_auth_required=False,
+            source="synthetic-presentation",
+            source_id=DEMO_SOURCE_ID,
+            stale_after_seconds=max(config.stale_after_seconds, 5),
+            yellow_seconds=config.timing.yellow_seconds,
+            all_red_seconds=config.timing.all_red_seconds,
+            demo=True,
+        )
+
+    @app.get("/health/demo-ready", tags=["demo", "health"])
+    def demo_ready(request: Request) -> JSONResponse:
+        demo = get_demo(request)
+        return JSONResponse(
+            status_code=200 if demo.ready else 503,
+            content={
+                "status": "ready" if demo.ready else "not_ready",
+                "mode": "demo",
+                "hardware": "PresentationMockController",
+                "failure": demo.failure,
+            },
+        )
+
+    @app.get("/api/v1/demo/state", response_model=VisionTelemetry, tags=["demo"])
+    def demo_state(request: Request) -> VisionTelemetry:
+        return get_demo(request).latest
+
+    @app.put("/api/v1/demo/control/policy", tags=["demo", "control"])
+    def demo_set_policy(body: PolicyRequest, request: Request) -> dict[str, str]:
+        demo = get_demo(request)
+        demo.set_policy(body.policy)
+        return {"status": "accepted", "policy": body.policy.value, "scope": "demo"}
+
+    @app.post("/api/v1/demo/emergency", response_model=EmergencyResponse, tags=["demo", "control"])
+    def demo_emergency(body: EmergencyRequest, request: Request) -> EmergencyResponse:
+        demo = get_demo(request)
+        demo.set_emergency(body.direction, body.ttl_seconds)
+        return EmergencyResponse(
+            status="accepted", expires_at_simulation_seconds=demo.engine.emergency_until
+        )
+
+    @app.delete("/api/v1/demo/emergency", tags=["demo", "control"])
+    def demo_cancel_emergency(request: Request) -> dict[str, str]:
+        get_demo(request).clear_emergency()
+        return {"status": "cleared", "scope": "demo"}
+
+    @app.post(
+        "/api/v1/demo/simulation/compare",
+        response_model=ComparisonResult,
+        tags=["demo", "simulation"],
+    )
+    def demo_comparison(body: ComparisonRequest, request: Request) -> ComparisonResult:
+        demo = get_demo(request)
+        if not demo.comparison_lock.acquire(blocking=False):
+            raise HTTPException(status_code=409, detail="A demo comparison is already running")
+        try:
+            return compare(body, config.timing)
+        finally:
+            demo.comparison_lock.release()
+
+    @app.websocket("/ws/demo/telemetry")
+    async def demo_telemetry(websocket: WebSocket) -> None:
+        demo: DemoRuntime = websocket.app.state.demo_runtime
+        await websocket.accept()
+        events = demo.stream()
+        try:
+            while True:
+                snapshot = await anext(events)
+                await websocket.send_json(snapshot.model_dump(mode="json"))
+        except WebSocketDisconnect:
+            pass
+        finally:
+            await events.aclose()
+
+    @app.get("/api/v1/demo/vision/frame.svg", tags=["demo"])
+    def demo_frame(request: Request) -> Response:
+        return Response(
+            get_demo(request).frame_svg(),
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "no-store"},
         )
 
     @app.put("/api/v1/control/policy", dependencies=[Depends(require_operator)], tags=["control"])

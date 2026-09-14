@@ -1,13 +1,16 @@
-# Recordings
+# Local recordings
 
-Каталог локальных видео и экспортов benchmark, исключённых из Git.
-Пример: `uv run python scripts/compare.py > recordings/comparison.json`.
+The default Vision config expects `car-detection.mp4` in this directory.
+It is intentionally not bundled in this project archive.
 
-Vision demo создаёт видео `.mp4`, превью `.jpg`, покадровой журнал `.jsonl`
-и итоговый `.report.json`. Последний дополнительный кадр видео показывает all-red.
-`vision-backend.report.json` содержит результат проверки настоящего backend pipeline.
+Fetch the pinned demo input from the project root:
 
-Входные `car-detection.mp4` и `person-bicycle-car-detection.mp4` происходят из
-[Intel IoT sample-videos](https://github.com/intel-iot-devkit/sample-videos), CC-BY-4.0.
-Видео с overlay — обработанные версии этих записей; атрибуцию нужно сохранять при публикации.
-`synthetic-demo.mp4` генерируется локально и явно обозначен как SYNTHETIC FIXTURE.
+```powershell
+uv run --extra vision python scripts/fetch_vision_demo.py --asset video
+```
+
+For the mixed traffic sample used by the dashboard recipe:
+
+```powershell
+uv run --extra vision python scripts/fetch_vision_demo.py --asset traffic
+```

@@ -46,6 +46,10 @@ def test_operator_auth_validation_and_comparison() -> None:
         assert response.status_code == 200
         data = response.json()
         assert data["fixed"]["arrived"] == data["adaptive"]["arrived"]
+        demo_response = client.post(
+            "/api/v1/demo/simulation/compare", json={"duration_seconds": 30}
+        )
+        assert demo_response.status_code == 200
 
 
 class FailingHardware(MockHardwareController):
@@ -123,3 +127,71 @@ def test_failed_readiness_keeps_liveness_and_rejects_emergency() -> None:
         assert client.get("/health/live").status_code == 200
         assert client.get("/health/ready").status_code == 503
         assert client.post("/api/v1/emergency", json={"direction": "north"}).status_code == 503
+
+
+def test_cors_allows_only_configured_dashboard_origin() -> None:
+    origin = "https://dashboard.example.com"
+    app = create_app(Settings(cors_origins=(origin,)))
+    with TestClient(app) as client:
+        allowed = client.options(
+            "/api/v1/system",
+            headers={"Origin": origin, "Access-Control-Request-Method": "GET"},
+        )
+        assert allowed.status_code == 200
+        assert allowed.headers["access-control-allow-origin"] == origin
+
+        denied = client.options(
+            "/api/v1/system",
+            headers={"Origin": "https://wrong.example.com", "Access-Control-Request-Method": "GET"},
+        )
+        assert denied.status_code == 400
+        assert "access-control-allow-origin" not in denied.headers
+
+
+def test_presentation_demo_is_ready_and_isolated_from_real_runtime() -> None:
+    app = create_app(Settings(tick_seconds=0.05))
+    with TestClient(app) as client:
+        demo_system = client.get("/api/v1/demo/system")
+        assert demo_system.status_code == 200
+        assert demo_system.json()["mode"] == "demo"
+        assert demo_system.json()["demo"] is True
+        assert client.get("/health/demo-ready").status_code == 200
+
+        initial_real_policy = client.get("/api/v1/system").json()["policy"]
+        policy_response = client.put("/api/v1/demo/control/policy", json={"policy": "fixed"})
+        assert policy_response.status_code == 200
+        assert client.get("/api/v1/demo/system").json()["policy"] == "fixed"
+        assert client.get("/api/v1/system").json()["policy"] == initial_real_policy
+
+        comparison = client.post(
+            "/api/v1/demo/simulation/compare",
+            json={"duration_seconds": 30, "scenario": {"seed": 7}},
+        )
+        assert comparison.status_code == 200
+        assert comparison.json()["fixed"]["arrived"] == comparison.json()["adaptive"]["arrived"]
+
+        state = client.get("/api/v1/demo/state")
+        assert state.status_code == 200
+        payload = state.json()
+        assert payload["schema_version"] == "2.0-vision"
+        assert payload["mode"] == "demo"
+        assert payload["traffic"]["source_id"] == "demo"
+        assert payload["pipeline"]["state"] == "running"
+
+        with client.websocket_connect("/ws/demo/telemetry") as socket:
+            first = socket.receive_json()
+            second = socket.receive_json()
+            assert second["sequence"] >= first["sequence"]
+            assert second["mode"] == "demo"
+
+        emergency = client.post(
+            "/api/v1/demo/emergency", json={"direction": "east", "ttl_seconds": 10}
+        )
+        assert emergency.status_code == 200
+        assert client.get("/api/v1/demo/state").json()["emergency_phase"] == "east_west"
+        assert client.delete("/api/v1/demo/emergency").status_code == 200
+
+        frame = client.get("/api/v1/demo/vision/frame.svg")
+        assert frame.status_code == 200
+        assert frame.headers["content-type"].startswith("image/svg+xml")
+        assert "PRESENTATION DEMO" in frame.text

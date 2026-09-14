@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     hardware_timeout_seconds: float = Field(default=1, gt=0, le=2, allow_inf_nan=False)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     operator_token: SecretStr | None = None
+    cors_origins: tuple[str, ...] = ()
     dashboard_directory: Path = Path("apps/dashboard/dist")
     timing: Timing = Field(default_factory=Timing)
     scenario: Scenario = Field(default_factory=Scenario)

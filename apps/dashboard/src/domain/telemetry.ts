@@ -36,7 +36,7 @@ export interface Snapshot {
 export interface SystemInfo {
   mode: string; policy: Policy; hardware: string; operator_auth_required: boolean;
   source: string; source_id: string; stale_after_seconds: number;
-  yellow_seconds: number; all_red_seconds: number;
+  yellow_seconds: number; all_red_seconds: number; demo?: boolean;
 }
 export interface Comparison { seed: number; duration_seconds: number; fixed: KPI; adaptive: KPI; wait_reduction_percent: number | null }
 type RecordValue = Record<string, unknown>;
