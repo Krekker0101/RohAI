@@ -1,0 +1,231 @@
+{
+  "$defs": {
+    "RewardSpecification": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": "rohai-reward-v1",
+          "default": "rohai-reward-v1",
+          "title": "Version",
+          "type": "string"
+        },
+        "objective": {
+          "default": "Reference: minimize accumulated entity delay; not an optimized reward",
+          "title": "Objective",
+          "type": "string"
+        },
+        "approved_for_training": {
+          "default": false,
+          "title": "Approved For Training",
+          "type": "boolean"
+        },
+        "approval_basis": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approval Basis"
+        },
+        "total_delay": {
+          "default": 1,
+          "minimum": 0,
+          "title": "Total Delay",
+          "type": "number"
+        },
+        "queue_delay": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Queue Delay",
+          "type": "number"
+        },
+        "pedestrian_delay": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Pedestrian Delay",
+          "type": "number"
+        },
+        "throughput": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Throughput",
+          "type": "number"
+        },
+        "maximum_wait": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Maximum Wait",
+          "type": "number"
+        },
+        "fairness": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Fairness",
+          "type": "number"
+        },
+        "spillback": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Spillback",
+          "type": "number"
+        },
+        "switching": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Switching",
+          "type": "number"
+        }
+      },
+      "title": "RewardSpecification",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "run_id": {
+      "pattern": "^[A-Za-z0-9_.-]{1,100}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "seed": {
+      "minimum": 0,
+      "title": "Seed",
+      "type": "integer"
+    },
+    "environment_version": {
+      "const": "rohai-control-env-v1",
+      "default": "rohai-control-env-v1",
+      "title": "Environment Version",
+      "type": "string"
+    },
+    "observation_schema": {
+      "const": "rohai-observation-v1",
+      "default": "rohai-observation-v1",
+      "title": "Observation Schema",
+      "type": "string"
+    },
+    "action_schema": {
+      "const": "rohai-action-v1",
+      "default": "rohai-action-v1",
+      "title": "Action Schema",
+      "type": "string"
+    },
+    "reward": {
+      "$ref": "#/$defs/RewardSpecification"
+    },
+    "reward_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Reward Sha256",
+      "type": "string"
+    },
+    "scenario_split_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Scenario Split Sha256",
+      "type": "string"
+    },
+    "algorithm_config": {
+      "additionalProperties": true,
+      "title": "Algorithm Config",
+      "type": "object"
+    },
+    "git_commit": {
+      "minLength": 7,
+      "title": "Git Commit",
+      "type": "string"
+    },
+    "dirty_tree": {
+      "title": "Dirty Tree",
+      "type": "boolean"
+    },
+    "code_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Code Sha256",
+      "type": "string"
+    },
+    "dependency_versions": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Dependency Versions",
+      "type": "object"
+    },
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "ended_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ended At"
+    },
+    "checkpoint": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Checkpoint"
+    },
+    "checkpoint_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Checkpoint Sha256"
+    },
+    "evaluation_metrics": {
+      "additionalProperties": true,
+      "title": "Evaluation Metrics",
+      "type": "object"
+    },
+    "status": {
+      "default": "PLANNED",
+      "enum": [
+        "PLANNED",
+        "RUNNING",
+        "COMPLETED",
+        "FAILED"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "run_id",
+    "seed",
+    "reward",
+    "reward_sha256",
+    "scenario_split_sha256",
+    "algorithm_config",
+    "git_commit",
+    "dirty_tree",
+    "code_sha256",
+    "dependency_versions",
+    "started_at"
+  ],
+  "title": "PolicyRunManifest",
+  "type": "object"
+}

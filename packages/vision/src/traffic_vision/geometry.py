@@ -2,12 +2,15 @@ import json
 import math
 import os
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
 from pydantic import Field, model_validator
 from traffic_core.models import Direction, Model
 
+from traffic_vision.calibration import CameraCalibration
 from traffic_vision.models import Lane, Point
+from traffic_vision.road_geometry import RoadIntersection
 
 EPSILON = 1e-9
 
@@ -99,11 +102,18 @@ class ApproachGeometry(Model):
     queue_zone: Polygon
     stop_line: StopLine
     pedestrian_crossing: Polygon | None = None
+    waiting_zone: Polygon | None = None
+    crosswalk_zone: Polygon | None = None
+    exit_zone: Polygon | None = None
     meters_per_pixel: float | None = Field(default=None, gt=0)
     enabled: bool = True
 
 
 class IntersectionGeometry(Model):
+    road: RoadIntersection | None = None
+    camera_calibration: CameraCalibration | None = None
+    calibration_validated_at: datetime | None = None
+    calibration_valid_for_seconds: float = Field(default=2592000, gt=0)
     schema_version: int = 1
     source_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
     reference_width: int = Field(default=1280, ge=100, le=16384)
@@ -113,10 +123,17 @@ class IntersectionGeometry(Model):
 
     @model_validator(mode="after")
     def complete(self) -> "IntersectionGeometry":
-        if self.schema_version != 1:
+        if self.schema_version not in (1, 2):
             raise ValueError("Unsupported geometry schema version")
         if len(self.approaches) != 4 or {a.direction for a in self.approaches} != set(Direction):
             raise ValueError("Exactly four distinct directions are required")
+        if (self.road is None) != (self.camera_calibration is None):
+            raise ValueError("Road model and camera calibration must be supplied together")
+        if self.road is not None and self.camera_calibration is not None:
+            if self.camera_calibration.metadata.camera_id != self.source_id:
+                raise ValueError("Camera calibration belongs to another source")
+            if self.camera_calibration.metadata.world_frame != self.road.world_frame:
+                raise ValueError("Road and calibration world frames differ")
         return self
 
     def approach(self, lane: Lane) -> ApproachGeometry | None:
@@ -132,7 +149,15 @@ class IntersectionGeometry(Model):
             for a in self.approaches
             if a.enabled
             and (
-                (a.pedestrian_crossing is not None and a.pedestrian_crossing.contains(point))
+                any(
+                    zone is not None and zone.contains(point)
+                    for zone in (
+                        a.waiting_zone,
+                        a.crosswalk_zone,
+                        a.exit_zone,
+                        a.pedestrian_crossing,
+                    )
+                )
                 if pedestrian
                 else a.incoming.contains(point)
             )

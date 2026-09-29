@@ -4,6 +4,13 @@ from traffic_core.settings import Timing
 PHASE_ORDER = (Phase.NS, Phase.EW, Phase.PEDESTRIAN)
 
 
+def adaptive_green_seconds(score: float, timing: Timing) -> float:
+    """Shared existing adaptive rule; environment adapters must not weaken its baseline."""
+    return min(
+        timing.max_green_seconds, timing.min_green_seconds + score * timing.seconds_per_score
+    )
+
+
 class TrafficController:
     """Bounded cyclic service prevents starvation; demand determines green duration."""
 
@@ -12,6 +19,8 @@ class TrafficController:
         self.policy = policy
 
     def decide(self, state: TrafficState, phase: Phase, emergency: Phase | None = None) -> Decision:
+        if any(not a.observation.reliable or a.traffic_score is None for a in state.approaches):
+            raise ValueError("Policy requires reliable measurements; safety must gate observation")
         if emergency is not None:
             return Decision(
                 phase=emergency,
@@ -24,12 +33,11 @@ class TrafficController:
             duration = self.timing.fixed_green_seconds
         else:
             score = sum(
-                a.traffic_score for a in state.approaches if phase_for(a.direction) == phase
+                a.traffic_score
+                for a in state.approaches
+                if phase_for(a.direction) == phase and a.traffic_score is not None
             )
-            duration = min(
-                self.timing.max_green_seconds,
-                self.timing.min_green_seconds + score * self.timing.seconds_per_score,
-            )
+            duration = adaptive_green_seconds(score, self.timing)
         return Decision(phase=phase, green_seconds=duration, reason=self.policy.value)
 
 

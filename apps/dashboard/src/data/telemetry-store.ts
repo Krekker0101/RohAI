@@ -8,7 +8,7 @@ interface State {
   snapshot: Snapshot | null; system: SystemInfo | null; connected: boolean; safe: boolean;
   ready: boolean; receivedAt: number; error: string | null; history: HistoryPoint[]; events: EventItem[];
 }
-interface ReadyPayload { status?: string; failure?: string | null }
+interface ReadyPayload { status?: string; failure?: string | null; control_ready?: boolean }
 
 export class TelemetryStore {
   private state: State = { snapshot: null, system: null, connected: false, safe: false, ready: false, receivedAt: 0, error: null, history: [], events: [] };
@@ -82,7 +82,7 @@ export class TelemetryStore {
       if (this.active && this.controller === controller) {
         this.update({
           system,
-          ready: health.ok,
+          ready: health.ok && payload.control_ready !== false,
           ...(health.ok ? {} : { error: payload.failure ? `Backend не готов: ${payload.failure}` : `Backend не готов (${health.status})` }),
         });
       }
@@ -129,6 +129,7 @@ export class TelemetryStore {
         this.pending = snapshot;
         this.update({ receivedAt: Date.now(), error: null });
       } catch (error) {
+        this.pending = null;
         this.update({ error: `Некорректная телеметрия backend: ${error instanceof Error ? error.message : String(error)}`, ready: false, safe: false });
         ws.close();
       }

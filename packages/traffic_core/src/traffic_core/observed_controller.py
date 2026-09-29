@@ -29,6 +29,13 @@ class ObservedTrafficController:
 
     def advance(self, state: TrafficState, now: float) -> None:
         self.now = now
+        if not self.safety.accept_observation(state, now):
+            self.decision = Decision(
+                phase=self.safety.phase,
+                green_seconds=self.safety.green_seconds,
+                reason="perception_unreliable_all_red",
+            )
+            return
         if now >= self.emergency_until:
             self.clear_emergency()
         phase = self.safety.phase

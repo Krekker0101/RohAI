@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
-from traffic_core.models import ObjectKind
+from traffic_core.models import Direction, ObjectKind, ObservationEvidence
 from traffic_vision.analytics import TrafficAnalyzer
 from traffic_vision.contracts import BoundingBox
 from traffic_vision.geometry import (
@@ -90,21 +90,24 @@ def test_stationary_confirmation_wait_and_moving_reset(geometry: IntersectionGeo
         snapshot = analyzer.process(
             (observation(now),),
             source_id="demo",
+            health={d.value: ObservationEvidence.simulated() for d in Direction},
             timestamp=now,
             frame_id=frame_id,
             width=1280,
             height=720,
         )
         track = snapshot.tracks[0]
-        assert track.queued == (frame_id >= 3)
-    assert track.waiting_started_at == pytest.approx(0.1)
-    assert track.current_wait_time == pytest.approx(0.8)
+        assert track.queued == (frame_id >= 2)
+    assert track.waiting_started_at == pytest.approx(0.0)
+    assert track.current_wait_time == pytest.approx(0.9)
     assert snapshot.traffic.directions["north"].queue_count == 1
-    assert snapshot.traffic.directions["north"].queue_confidence == pytest.approx(0.9)
-    assert snapshot.traffic.directions["north"].estimated_queue_length > 100
+    assert snapshot.traffic.directions["north"].queue_confidence == pytest.approx(1.0)
+    length = snapshot.traffic.directions["north"].estimated_queue_length
+    assert length is not None and length > 100
     moved = analyzer.process(
         (observation(1, x=0.47),),
         source_id="demo",
+        health={d.value: ObservationEvidence.simulated() for d in Direction},
         timestamp=1,
         frame_id=10,
         width=1280,
@@ -112,7 +115,7 @@ def test_stationary_confirmation_wait_and_moving_reset(geometry: IntersectionGeo
     )
     assert moved.tracks[0].current_wait_time == 0
     assert not moved.tracks[0].queued
-    assert moved.tracks[0].total_observed_wait_seconds == pytest.approx(0.8)
+    assert moved.tracks[0].total_observed_wait_seconds == pytest.approx(0.9)
 
 
 def test_queue_requires_roi_and_before_stop_line(geometry: IntersectionGeometry) -> None:
@@ -125,6 +128,7 @@ def test_queue_requires_roi_and_before_stop_line(geometry: IntersectionGeometry)
         result = analyzer.process(
             (observation(now, y=0.355),),
             source_id="demo",
+            health={d.value: ObservationEvidence.simulated() for d in Direction},
             timestamp=now,
             frame_id=frame_id,
             width=1280,
@@ -143,12 +147,19 @@ def test_no_duplicate_counting_for_frames_detections_or_reappearance(
         now = frame_id / 10
         duplicate = (observation(now), observation(now))
         result = analyzer.process(
-            duplicate, source_id="demo", timestamp=now, frame_id=frame_id, width=1280, height=720
+            duplicate,
+            source_id="demo",
+            health={d.value: ObservationEvidence.simulated() for d in Direction},
+            timestamp=now,
+            frame_id=frame_id,
+            width=1280,
+            height=720,
         )
         assert (
             analyzer.process(
                 duplicate,
                 source_id="demo",
+                health={d.value: ObservationEvidence.simulated() for d in Direction},
                 timestamp=now,
                 frame_id=frame_id,
                 width=1280,
@@ -156,39 +167,76 @@ def test_no_duplicate_counting_for_frames_detections_or_reappearance(
             )
             is result
         )
-        assert result.traffic.unique_vehicle_arrivals == 1
-        assert result.traffic.directions["north"].car_count == 1
-    analyzer.process((), source_id="demo", timestamp=5, frame_id=50, width=1280, height=720)
+        assert result.traffic.unique_vehicle_arrivals == 0
+        assert result.traffic.directions["north"].car_count == (1 if frame_id >= 2 else None)
+    analyzer.process(
+        (),
+        source_id="demo",
+        health={d.value: ObservationEvidence.simulated() for d in Direction},
+        timestamp=5,
+        frame_id=50,
+        width=1280,
+        height=720,
+    )
     assert not analyzer.tracks
     result = analyzer.process(
-        (observation(5.1),), source_id="demo", timestamp=5.1, frame_id=51, width=1280, height=720
+        (observation(5.1),),
+        source_id="demo",
+        health={d.value: ObservationEvidence.simulated() for d in Direction},
+        timestamp=5.1,
+        frame_id=51,
+        width=1280,
+        height=720,
     )
-    assert result.traffic.unique_vehicle_arrivals == 1
+    assert result.traffic.unique_vehicle_arrivals == 0
     assert result.tracks[0].first_seen == 5.1
 
 
-def test_missing_detection_and_large_gap_do_not_accrue_wait(geometry: IntersectionGeometry) -> None:
+def test_missing_detection_preserves_bounded_wait_and_large_gap_is_uncertain(
+    geometry: IntersectionGeometry,
+) -> None:
     analyzer = TrafficAnalyzer(geometry, AnalyticsSettings())
     for frame_id in range(8):
         now = frame_id / 10
         analyzer.process(
             (observation(now),),
             source_id="demo",
+            health={d.value: ObservationEvidence.simulated() for d in Direction},
             timestamp=now,
             frame_id=frame_id,
             width=1280,
             height=720,
         )
-    analyzer.process((), source_id="demo", timestamp=0.8, frame_id=8, width=1280, height=720)
-    result = analyzer.process(
-        (observation(0.9),), source_id="demo", timestamp=0.9, frame_id=9, width=1280, height=720
+    analyzer.process(
+        (),
+        source_id="demo",
+        health={d.value: ObservationEvidence.simulated() for d in Direction},
+        timestamp=0.8,
+        frame_id=8,
+        width=1280,
+        height=720,
     )
-    assert result.tracks[0].current_wait_time == 0
-    assert result.tracks[0].speed_px_per_second is None
     result = analyzer.process(
-        (observation(2),), source_id="demo", timestamp=2, frame_id=20, width=1280, height=720
+        (observation(0.9),),
+        source_id="demo",
+        health={d.value: ObservationEvidence.simulated() for d in Direction},
+        timestamp=0.9,
+        frame_id=9,
+        width=1280,
+        height=720,
     )
-    assert result.tracks[0].current_wait_time == 0
+    assert result.tracks[0].current_wait_time == pytest.approx(0.9)
+    assert result.tracks[0].speed_px_per_second == 0
+    result = analyzer.process(
+        (observation(2),),
+        source_id="demo",
+        health={d.value: ObservationEvidence.simulated() for d in Direction},
+        timestamp=2,
+        frame_id=20,
+        width=1280,
+        height=720,
+    )
+    assert result.tracks[0].current_wait_time == pytest.approx(2)
     assert result.tracks[0].first_seen == 0
     assert len(result.tracks[0].trajectory) <= 32
 
@@ -196,11 +244,18 @@ def test_missing_detection_and_large_gap_do_not_accrue_wait(geometry: Intersecti
 def test_epoch_resets_identity_and_timestamps_are_ordered(geometry: IntersectionGeometry) -> None:
     analyzer = TrafficAnalyzer(geometry, AnalyticsSettings())
     first = analyzer.process(
-        (observation(0),), source_id="demo", timestamp=0, frame_id=0, width=1280, height=720
+        (observation(0),),
+        source_id="demo",
+        health={d.value: ObservationEvidence.simulated() for d in Direction},
+        timestamp=0,
+        frame_id=0,
+        width=1280,
+        height=720,
     )
     second = analyzer.process(
         (observation(0),),
         source_id="demo",
+        health={d.value: ObservationEvidence.simulated() for d in Direction},
         timestamp=0,
         frame_id=0,
         width=1280,
@@ -212,6 +267,7 @@ def test_epoch_resets_identity_and_timestamps_are_ordered(geometry: Intersection
         analyzer.process(
             (observation(0),),
             source_id="demo",
+            health={d.value: ObservationEvidence.simulated() for d in Direction},
             timestamp=0,
             frame_id=1,
             width=1280,
@@ -229,7 +285,13 @@ def test_unknown_ids_and_untracked_detections_do_not_create_arrivals(
     unknown = observation(0, x=0.8, y=0.8)
     untracked = observation(0).model_copy(update={"track_id": None})
     result = analyzer.process(
-        (unknown, untracked), source_id="demo", timestamp=0, frame_id=0, width=1280, height=720
+        (unknown, untracked),
+        source_id="demo",
+        health={d.value: ObservationEvidence.simulated() for d in Direction},
+        timestamp=0,
+        frame_id=0,
+        width=1280,
+        height=720,
     )
     assert result.traffic.unique_vehicle_arrivals == 0
     assert result.traffic.unknown_count == 1
@@ -256,14 +318,15 @@ def test_length_units_and_core_state_adapter(geometry: IntersectionGeometry) -> 
         result = analyzer.process(
             (observation(now),),
             source_id="demo",
+            health={d.value: ObservationEvidence.simulated() for d in Direction},
             timestamp=now,
             frame_id=frame_id,
             width=1280,
             height=720,
         )
     metrics = result.traffic.directions["north"]
-    assert metrics.queue_length_unit == "m"
-    assert metrics.estimated_queue_length == pytest.approx(8.4)
+    assert metrics.queue_length_unit == "px"  # Scalar calibration is no longer metric.
+    assert metrics.estimated_queue_length == pytest.approx(108.0)
     core = analyzer.to_core_state(result)
     assert core.approaches[0].queue_length == 1
     assert core.approaches[0].traffic_score == metrics.traffic_score

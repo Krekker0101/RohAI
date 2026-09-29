@@ -14,6 +14,7 @@ from traffic_core.settings import Timing
 from traffic_vision.analytics import TrafficAnalyzer
 from traffic_vision.detector import Detector, SyntheticDetector, YOLODetector
 from traffic_vision.geometry import load_geometry
+from traffic_vision.health import PerceptionHealthMonitor
 from traffic_vision.models import PipelineStatus
 from traffic_vision.overlay import DebugOverlay
 from traffic_vision.settings import VisionSettings
@@ -34,6 +35,7 @@ def run_demo(
     source = create_source(settings)
     detector: Detector = SyntheticDetector() if synthetic_detector else YOLODetector(settings)
     analyzer = TrafficAnalyzer(geometry, settings.analytics)
+    health = PerceptionHealthMonitor(settings.health)
     overlay = DebugOverlay(geometry, detector.name + " / REPLAY")
     controller = ObservedTrafficController(Timing(), Policy.ADAPTIVE)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -80,6 +82,7 @@ def run_demo(
                     width=width,
                     height=height,
                     stream_epoch=packet.stream_epoch,
+                    health=health.inspect(packet, geometry, time.monotonic()),
                 )
                 controller.advance(analyzer.to_core_state(analysis), packet.timestamp)
                 processed += 1
@@ -87,7 +90,12 @@ def run_demo(
                 classes.update(d.kind.value for d in detections)
                 identities.update(t.track_uid for t in analysis.tracks)
                 peak_queue = max(
-                    peak_queue, sum(m.queue_count for m in analysis.traffic.directions.values())
+                    peak_queue,
+                    sum(
+                        m.queue_count
+                        for m in analysis.traffic.directions.values()
+                        if m.queue_count is not None
+                    ),
                 )
                 maximum_wait = max(
                     maximum_wait, max((t.current_wait_time for t in analysis.tracks), default=0)
@@ -153,6 +161,7 @@ def run_demo(
         "unique_track_ids": len(identities),
         "observed_classes": sorted(classes),
         "peak_queue": peak_queue,
+        "peak_queue_scope": "reliable measurements only; unknown directions excluded",
         "maximum_observed_wait_seconds": maximum_wait,
         "processing_fps": processed / max(time.monotonic() - started, 1e-6),
         "duration_seconds": last_analysis.traffic.timestamp if last_analysis is not None else 0,

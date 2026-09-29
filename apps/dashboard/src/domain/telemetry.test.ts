@@ -42,3 +42,31 @@ describe('telemetry boundary',()=>{
     expect(history).toHaveLength(90);expect(appendHistory(history,{...snapshot,time:0})).toHaveLength(1);
   });
 });
+
+
+describe('perception reliability contract v3', () => {
+  const row = { car_count: 0, bus_count: 0, truck_count: 0, motorcycle_count: 0,
+    bicycle_count: 0, pedestrian_count: 0, queue_count: 0, traffic_score: 0,
+    average_wait_seconds: 0, max_wait_seconds: 0, arrival_rate: 0, congestion: 'low',
+    estimated_queue_length: 0, queue_length_unit: 'px', queue_confidence: 1,
+    observation: { observation_status: 'OBSERVED' } };
+  const vision = { ...fixture, schema_version: '3.0-vision', mode: 'vision', control_ready: true,
+    tracks: [], pipeline: null, traffic: { timestamp: 10, source_id: 'camera',
+      directions: Object.fromEntries(directions.map(d => [d, row])),
+      unique_vehicle_arrivals: 0, unique_pedestrian_arrivals: 0 } };
+  it('accepts reliable v3 and keeps faulted control untrusted', () => {
+    expect(totals(normalize(vision)).queue).toBe(0);
+    const faulted = normalize({ ...vision, control_ready: false });
+    expect(trustedSignals(true, true, 1000, 1500, 3, faulted)).toBe(false);
+  });
+  it.each(['UNOBSERVED', 'DEGRADED', 'STALE', 'FAILED', 'PARTIALLY_OBSERVED'])(
+    'rejects %s instead of rendering a valid zero', status => {
+      expect(() => normalize({ ...vision, traffic: { ...vision.traffic,
+        directions: { ...vision.traffic.directions, north: { ...row, queue_count: null,
+          observation: { observation_status: status } } } } })).toThrow('Недостоверное');
+    });
+  it('does not coerce null in an allegedly observed payload', () => {
+    expect(() => normalize({ ...vision, traffic: { ...vision.traffic,
+      directions: { ...vision.traffic.directions, north: { ...row, queue_count: null } } } })).toThrow();
+  });
+});

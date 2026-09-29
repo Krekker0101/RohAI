@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>RohAI / Smart Traffic AI — полный технический отчет</title>
+<style>
+@page { size: A4; margin: 18mm 17mm 17mm 19mm; }
+* { box-sizing: border-box; }
+body { margin: 0; color: #20252b; font-family: Georgia, "Times New Roman", serif; font-size: 10.5pt; line-height: 1.34; background: #e8ebee; }
+.page { width: 174mm; min-height: 264mm; margin: 0 auto 8mm; padding: 0; background: white; page-break-after: always; position: relative; }
+.page:last-child { page-break-after: auto; }
+h1 { font-size: 25pt; line-height: 1.08; margin: 0 0 10mm; color: #17324d; }
+h2 { font-size: 17pt; margin: 0 0 5mm; color: #17324d; border-bottom: 1px solid #aab7c3; padding-bottom: 2mm; }
+h3 { font-size: 12pt; margin: 5mm 0 2mm; color: #245d72; }
+p { margin: 0 0 3.5mm; }
+ul, ol { margin: 2mm 0 4mm 7mm; padding-left: 5mm; }
+li { margin-bottom: 1.5mm; }
+table { width: 100%; border-collapse: collapse; margin: 3mm 0 5mm; font-size: 9pt; }
+th { background: #17324d; color: white; text-align: left; }
+th, td { border: 1px solid #b8c2ca; padding: 1.8mm 2mm; vertical-align: top; }
+code, pre { font-family: Consolas, "Courier New", monospace; }
+code { color: #1f566d; }
+pre { white-space: pre-wrap; background: #f0f3f5; border-left: 3px solid #2c8294; padding: 3mm; font-size: 8.5pt; line-height: 1.25; }
+.cover { display: flex; flex-direction: column; justify-content: center; min-height: 264mm; padding: 18mm; background: linear-gradient(145deg, #f4f7f8, #dce8ec); }
+.kicker { color: #2c8294; font: 700 10pt Arial, sans-serif; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 7mm; }
+.lead { font-size: 14pt; color: #405766; max-width: 145mm; }
+.meta { margin-top: 18mm; border-top: 2px solid #2c8294; padding-top: 4mm; font-family: Arial, sans-serif; color: #405766; }
+.note { border-left: 4px solid #d48736; background: #fff5e8; padding: 3mm 4mm; margin: 4mm 0; }
+.good { border-left: 4px solid #3f8b67; background: #edf8f1; padding: 3mm 4mm; margin: 4mm 0; }
+.small { font-size: 8.5pt; color: #52636e; }
+.footer { position: absolute; bottom: 0; left: 0; right: 0; border-top: 1px solid #c8d0d5; padding-top: 2mm; color: #687780; font: 8pt Arial, sans-serif; }
+.cols { columns: 2; column-gap: 8mm; }
+.cols p, .cols li { break-inside: avoid; }
+@media print { body { background: white; } .page { margin: 0; } }
+</style>
+</head>
+<body>
+
+<section class="page cover">
+<div class="kicker">RohAI / Smart Traffic AI</div>
+<h1>Полный технический отчет о проекте</h1>
+<p class="lead">Архитектура, ключевые алгоритмы, библиотеки, Vision Engine, управление перекрестком, текущий статус ИИ и план настоящего обучения модели.</p>
+<div class="meta"><b>Тип документа:</b> техническое описание проекта<br><b>Версия проекта:</b> 0.1.0<br><b>Дата анализа:</b> 25 сентября 2026 года<br><b>Исходная база:</b> файлы репозитория, документация, тесты, конфигурации и зафиксированные отчеты проверки</div>
+<div class="note"><b>Главный вывод.</b> RohAI сейчас является демонстрационным safety-first MVP. YOLO26n распознает объекты, ByteTrack поддерживает идентичности, а управление фазами выполняет прозрачная адаптивная эвристика. Обученной в этом репозитории собственной модели управления светофором пока нет.</div>
+</section>
+
+<section class="page">
+<h2>1. Резюме и назначение проекта</h2>
+<p>RohAI предназначен для прототипирования интеллектуального управления дорожным перекрестком. Система принимает либо детерминированный поток из симулятора, либо наблюдения из видеокамеры, переводит их в единый формат <code>TrafficState</code>, рассчитывает спрос на подходах и предлагает длительность текущей фазы. Перед отправкой команды сигнал проходит через независимый <code>SafetyController</code>.</p>
+<p>Проект объединяет пять задач: моделирование транспорта, компьютерное зрение, принятие решения, безопасное управление сигналами и операторскую визуализацию. Важное архитектурное решение состоит в том, что восприятие и управление разделены: Vision Engine сообщает, что видит камера; контроллер решает, какую фазу желательно включить; safety-машина определяет, какую фазу разрешено включить.</p>
+<h3>Что система уже умеет</h3>
+<ul><li>работать в DEMO без камеры, используя синтетические наблюдения и реальную control/safety-логику;</li><li>запускать simulation с фиксированным seed и воспроизводимым сравнением Fixed-Time и Adaptive;</li><li>обрабатывать файл, webcam, RTSP и synthetic source;</li><li>детектировать классы транспорта YOLO26 и отслеживать их ByteTrack;</li><li>определять подход, очередь, ожидание, arrivals и congestion по калиброванным ROI;</li><li>выдавать REST, WebSocket, MJPEG и dashboard React;</li><li>переводить систему в all-red при ошибке, stale source, EOF или остановке.</li></ul>
+<h3>Что проектом не обещается</h3>
+<p>Это не сертифицированная система реального перекрестка. Симулятор не моделирует физику движения, а записанное видео не реагирует на сигналы. В проекте еще нет физического ESP32 adapter, ACK, watchdog, hardware-in-the-loop, размеченной выборки качества и собственного train pipeline.</p>
+<div class="good"><b>Практический смысл:</b> текущая версия хорошо подходит для демонстрации архитектуры и проверки программных инвариантов. Для реальной дороги потребуется отдельная инженерная, нормативная и аппаратная валидация.</div>
+<div class="footer">RohAI — полный технический отчет · 2</div>
+</section>
+
+<section class="page">
+<h2>2. Карта репозитория и создаваемые «ядра»</h2>
+<p>Репозиторий является модульной монорепой. Общая установка описана в корневом <code>pyproject.toml</code>, а четыре Python namespace собираются одним wheel. Такое разделение позволяет тестировать предметную модель без запуска FastAPI, камеры или hardware.</p>
+<table><tr><th>Ядро / пакет</th><th>Роль</th><th>Текущее состояние</th></tr>
+<tr><td><code>traffic_core</code></td><td>Сущности, фазы, KPI, политика, safety, порты</td><td>Основное доменное ядро, реализовано</td></tr>
+<tr><td><code>traffic_simulator</code></td><td>Детерминированные очереди и benchmark</td><td>Реализовано, не является физическим digital twin</td></tr>
+<tr><td><code>traffic_vision</code></td><td>Источники, YOLO26, ByteTrack, геометрия и аналитика</td><td>Реализовано для demo и записанных входов</td></tr>
+<tr><td>Decision / control</td><td>Adaptive или Fixed-Time предложение фазы</td><td>Эвристика, не ML и не RL</td></tr>
+<tr><td>Safety ядро</td><td>Разрешение переходов, clearance, all-red, fault latch</td><td>Реализовано отдельно от decision</td></tr>
+<tr><td>Backend runtime</td><td>Lifecycle, API, WS, hardware boundary</td><td>FastAPI + mock hardware</td></tr>
+<tr><td>Dashboard</td><td>Операторский интерфейс и аналитика</td><td>React 19 + Vite, реализовано</td></tr></table>
+<h3>Границы зависимостей</h3>
+<p><code>traffic_core</code> не импортирует FastAPI, OpenCV, simulator или аппаратные библиотеки. Backend создает объекты через constructor injection. Vision adapter использует общую функцию расчета state из core, поэтому правила traffic score не дублируются внутри YOLO-обертки.</p>
+<pre>Camera / Video / RTSP / Synthetic
+        -> Vision Engine -> TrafficState
+Simulator -------------------------> TrafficState
+        -> Decision Controller -> Safety Controller -> Hardware port
+        -> FastAPI REST/WebSocket -> React Dashboard</pre>
+<p>Главное создаваемое ядро проекта — не одна нейросеть, а связка «наблюдение → нормализованное состояние → решение → безопасный исполнитель». Это правильная основа для последующего подключения обучаемой политики без смешивания ее с safety.</p>
+<div class="footer">RohAI — полный технический отчет · 3</div>
+</section>
+
+<section class="page">
+<h2>3. Полный поток данных</h2>
+<h3>Simulation path</h3>
+<p>При старте <code>SimulationEngine</code> создает <code>Simulator</code>, <code>TrafficController</code> и <code>SafetyController</code>. На каждом шаге симулятор сначала продвигает очередь под предыдущим сигналом, затем формирует текущий <code>TrafficState</code>. Контроллер предлагает фазу и зеленую длительность. Safety-машина проверяет переход и только после этого формирует <code>SignalState</code>. Telemetry содержит traffic, lamps, decision, KPI и emergency.</p>
+<h3>Vision path</h3>
+<p>Vision Engine состоит из четырех worker stages: capture, inference, analysis и publishing. Между ними стоят bounded queues вместимостью один кадр. При перегрузке старые промежуточные данные отбрасываются, чтобы управление не опаздывало из-за очереди кадров. Стадии не блокируют ASGI event loop.</p>
+<ol><li>Capture получает кадр и добавляет source id, stream epoch, frame id и timestamp.</li><li>Inference запускает YOLO26 + ByteTrack и выдает normalized detections.</li><li>Analysis назначает lane, проверяет ROI, скорость, stop line, очередь, ожидание и arrivals.</li><li>Publishing строит overlay, JPEG и immutable latest snapshot.</li><li>Vision runtime переводит snapshot в общий core state и передает его ObservedTrafficController.</li></ol>
+<h3>DEMO path</h3>
+<p>DEMO не притворяется реальной камерой: его данные синтетические. При этом он использует настоящий <code>SimulationEngine</code>, настоящий decision и настоящий safety controller. Физический hardware demo runtime не получает, поэтому демонстрация безопасна для показа на ноутбуке.</p>
+<div class="note"><b>Смысл timestamps:</b> Vision использует время источника для аналитики, но backend control-clock независим. Медленная inference не должна уменьшать minimum green, yellow или clearance.</div>
+<div class="footer">RohAI — полный технический отчет · 4</div>
+</section>
+
+<section class="page">
+<h2>4. Математика состояния и метрики</h2>
+<p>Для каждого направления создается <code>ApproachState</code>. В него входят классовые counts, длина очереди, traffic score, среднее и максимальное ожидание, arrival rate и уровень congestion. Общий <code>TrafficState</code> требует ровно четыре направления: north, south, east, west.</p>
+<h3>Traffic score</h3>
+<p>Вес объекта зависит от класса: car = 1.0, bus = 2.5, truck = 2.0, motorcycle = 0.5, bicycle = 0.4, pedestrian = 1.0. Для очереди добавляется возраст самого старого ожидающего объекта, обычно с коэффициентом 0.05:</p>
+<pre>traffic_score = sum(class_weight for queued objects)
+                + oldest_wait_seconds * waiting_weight</pre>
+<p>Это объяснимая эвристика: автобус и грузовик влияют сильнее легкового автомобиля, а длительное ожидание постепенно повышает приоритет. Это не оценка пассажиров и не learned value function.</p>
+<h3>Метрики симулятора</h3>
+<table><tr><th>Метрика</th><th>Интерпретация</th></tr><tr><td>arrived / departed / remaining</td><td>Прибывшие, обслуженные и оставшиеся объекты</td></tr><tr><td>total_wait_seconds</td><td>Завершенное ожидание плюс возраст объектов в очереди на конце горизонта</td></tr><tr><td>mean_wait_per_arrival</td><td>Total wait, деленное на arrivals, включая незавершенные очереди</td></tr><tr><td>mean_completed_wait</td><td>Среднее только для departed</td></tr><tr><td>throughput_per_minute</td><td>Обслуженные объекты в минуту</td></tr><tr><td>max_queue</td><td>Максимум общей очереди, включая pedestrians</td></tr></table>
+<p>В Vision occupancy — видимые tracks текущего кадра, а unique arrivals — уникальные IDs за epoch. Это важное различие: один автомобиль не должен считаться прибывшим заново на каждом кадре.</p>
+<div class="footer">RohAI — полный технический отчет · 5</div>
+</section>
+
+<section class="page">
+<h2>5. Симулятор и benchmark</h2>
+<p><code>traffic_simulator</code> моделирует point queues FIFO. Прибытия генерируются как пуассоновские потоки для подходов и pedestrians. Seed делает поток воспроизводимым. Обслуживание зависит от headway и разрешающего сигнала. Координат машин, ускорения, длины автомобиля, spillback и реальной геометрии движения нет.</p>
+<h3>Почему paired comparison важен</h3>
+<p>Fixed-Time и Adaptive прогоняются на одном сценарии, seed, горизонте, timing и шаге 0.5 секунды. Поэтому различие KPI объясняется политикой, а не тем, что одному алгоритму случайно достался другой поток.</p>
+<table><tr><th>KPI, seed 42, 600 s</th><th>Fixed-Time</th><th>Smart adaptive</th></tr><tr><td>Прибыло объектов</td><td>427</td><td>427</td></tr><tr><td>Обслужено</td><td>311</td><td>355</td></tr><tr><td>Осталось</td><td>116</td><td>72</td></tr><tr><td>Суммарное ожидание, объект·с</td><td>34 872.29</td><td>24 394.59</td></tr><tr><td>Ожидание на arrival, с</td><td>81.67</td><td>57.13</td></tr><tr><td>Throughput / мин</td><td>31.1</td><td>35.5</td></tr><tr><td>Максимальная очередь</td><td>116</td><td>80</td></tr></table>
+<p>На этом одном сценарии снижение суммарного ожидания составляет 30.05%. Это полезный воспроизводимый результат, но не универсальная гарантия. Нужна серия seeds, разнообразные сценарии, доверительные интервалы и проверка устойчивости к перегрузке.</p>
+<div class="note"><b>Ограничение интерпретации:</b> benchmark измеряет поведение искусственной FIFO-модели. Он не доказывает, что такая же эффективность будет на настоящем перекрестке или на записанном видео.</div>
+<div class="footer">RohAI — полный технический отчет · 6</div>
+</section>
+
+<section class="page">
+<h2>6. Decision Engine: алгоритмы управления</h2>
+<p>Текущий контроллер поддерживает две политики. Fixed-Time выбирает заранее заданную длительность зеленого. Adaptive выбирает длительность при входе в green на основе traffic score текущей фазы.</p>
+<pre>green = min(max_green,
+             min_green + seconds_per_score * phase_score)</pre>
+<p>Фазы проходят циклически: <code>north_south → east_west → pedestrian → north_south</code>. Такой порядок обеспечивает обслуживание каждой фазы и снижает риск starvation при перекосе спроса. Пешеходная длительность задается отдельно.</p>
+<h3>Emergency priority</h3>
+<p>Оператор может задать автомобильное направление с TTL от 1 до 120 секунд. Последний запрос заменяет предыдущий. Emergency меняет желаемую фазу, но не перепрыгивает minimum green, yellow или clearance. После TTL цикл возвращается к нормальному режиму.</p>
+<h3>Что это за «AI» сейчас</h3>
+<p>Название Smart AI в dashboard обозначает адаптивное принятие решения по наблюдаемому спросу. В строгом смысле это rule-based heuristic controller. Здесь нет параметров, полученных оптимизатором, нейронной policy network, reinforcement learning, imitation learning или обучения по reward.</p>
+<p>Это не недостаток архитектуры: прозрачную политику легче проверить и безопасно ограничить. Но в технической документации нельзя называть ее обученной моделью. Если в будущем появится ML-policy, она должна выдавать только предложение, а SafetyController должен сохранить право отклонить опасный переход.</p>
+<div class="footer">RohAI — полный технический отчет · 7</div>
+</section>
+
+<section class="page">
+<h2>7. Safety Controller и отказоустойчивость</h2>
+<p>SafetyController — самая критичная часть control path. Он является конечным автоматом, который единолично формирует сигнал. Допустимый порядок выглядит так:</p>
+<pre>ALL_RED -> GREEN -> YELLOW -> ALL_RED -> GREEN</pre>
+<h3>Защищаемые инварианты</h3>
+<ul><li>startup начинается с all-red не менее заданного интервала;</li><li>green не завершается раньше minimum green;</li><li>между транспортными фазами сохраняется yellow и all-red;</li><li>пешеходный green имеет собственный minimum и clearance;</li><li>в одном tick выполняется не более одного перехода;</li><li>время должно быть конечным и монотонным;</li><li>ошибка защелкивает состояние all-red до нового runtime;</li><li>hardware apply выполняется с bounded timeout.</li></ul>
+<h3>Отказ и readiness</h3>
+<p>При ошибке модели, decoder, stale source, EOF или runtime система пытается применить all-red. Readiness становится 503, liveness остается 200, чтобы отделить живой HTTP-процесс от готового control pipeline. Автоматического возврата к green после fault нет: требуется явный перезапуск.</p>
+<p>Сейчас исполнитель — <code>MockHardwareController</code>. Python-команда сама по себе не доказывает физическое состояние ламп. Для настоящей установки нужны подтверждение ACK, heartbeat, независимый watchdog на микроконтроллере и hardware-in-the-loop тесты запрещенных комбинаций.</p>
+<div class="good"><b>Архитектурное правило:</b> нейросеть и decision engine могут ошибаться или быть заменены. Safety слой не должен зависеть от того, каким способом получено наблюдение.</div>
+<div class="footer">RohAI — полный технический отчет · 8</div>
+</section>
+
+<section class="page">
+<h2>8. Vision Engine: YOLO26 и ByteTrack</h2>
+<p>Видеодетектор реализован в <code>packages/vision/src/traffic_vision/detector.py</code>. Загружается локальный файл <code>datasets/models/yolo26n.pt</code>. Перед inference выполняется warm-up. Ultralytics вызывается через <code>model.track(..., persist=True)</code> с конфигурацией ByteTrack и списком нужных COCO classes.</p>
+<table><tr><th>COCO id</th><th>Внутренний класс</th></tr><tr><td>0</td><td>person → pedestrian</td></tr><tr><td>1</td><td>bicycle</td></tr><tr><td>2</td><td>car</td></tr><tr><td>3</td><td>motorcycle</td></tr><tr><td>5</td><td>bus</td></tr><tr><td>7</td><td>truck</td></tr></table>
+<p>Каждая detection содержит confidence, bbox, centroid/footpoint, timestamp и optional track ID. Неконфирмированные объекты могут отображаться, но не должны увеличивать счетчик arrivals. Повторные предложения с одним ID объединяются по максимальной confidence.</p>
+<h3>Идентичность и границы метода</h3>
+<p>Локальные IDs переводятся в монотонные session IDs, а публичный UID включает source и stream epoch. При reconnect или большом разрыве ByteTrack reset. Это не appearance re-identification: при перекрытии или смене ID одна машина может породить новый arrival. Поэтому уникальность гарантируется в рамках наблюдаемой session, а не навсегда.</p>
+<p>ByteTrack — алгоритм ассоциации detections между кадрами, а не обучение модели. Он помогает получить траекторию и устойчивый ID, но не решает калибровку дороги, перспективу, скрытые объекты или причинность между сигналом и потоком.</p>
+<div class="footer">RohAI — полный технический отчет · 9</div>
+</section>
+
+<section class="page">
+<h2>9. Геометрия, ROI и аналитика очереди</h2>
+<p>Камера описывается JSON/YAML geometry. Координаты нормализованы в диапазон [0, 1], поэтому смена разрешения сохраняет поле зрения. Для подхода задаются incoming polygon, queue_zone, stop_line, optional pedestrian crossing, enabled и optional meters_per_pixel.</p>
+<h3>Назначение объекта</h3>
+<ol><li>Берется нижняя центральная точка bbox, то есть приближение точки контакта объекта с дорогой.</li><li>Проверяется detection_zone и incoming ROI.</li><li>Если несколько ROI подходят, новый объект получает UNKNOWN; прежняя lane сохраняется, если она остается допустимой.</li><li>Stop line с upstream anchor определяет, находится ли объект до линии.</li></ol>
+<h3>Подтверждение очереди</h3>
+<p>Транспорт считается queued, если он видим, назначен направлению, находится в queue ROI, находится upstream от stop line и движется медленнее порога несколько последовательных кадров. Скорость считается по смещению footpoint в reference pixels за секунду и сглаживается EMA. По умолчанию порог составляет 12 px/s, подтверждение — 3 slow frames, допустимый интервал — 0.75 s.</p>
+<p>После подтверждения current wait растет. При движении или выходе из ROI текущий wait сбрасывается, а total observed wait сохраняется. Потерянный трек удаляется после TTL, но ID остается в counted set. Это защищает от повторного счета, хотя не исправляет ошибки самого tracker.</p>
+<p>Queue length измеряется от stop line до дальнего края queued bbox. Без homography это pixels; при грубом meters_per_pixel — meters, но не точная физическая длина в перспективной сцене. Queue confidence — средняя confidence детекций, а не калиброванная вероятность правильной очереди.</p>
+<div class="footer">RohAI — полный технический отчет · 10</div>
+</section>
+
+<section class="page">
+<h2>10. Backend, API и Dashboard</h2>
+<h3>Backend</h3>
+<p>FastAPI отвечает за lifespan, runtime task, REST endpoints, WebSocket, MJPEG, calibration, health и operator token. Один uvicorn worker обязателен, потому что camera state, tracker и controller принадлежат одному процессу. WebSocket хранит максимум один snapshot на клиента; медленный клиент пропускает промежуточные состояния, не блокируя управление.</p>
+<p>Основные точки: <code>/health/live</code>, <code>/health/ready</code>, <code>/api/v1/state</code>, <code>/ws/telemetry</code>, <code>/api/v1/vision/status</code>, <code>/api/v1/vision/frame.jpg</code>, <code>/api/v1/vision/stream</code> и geometry GET/PUT. В control endpoints может требоваться <code>X-Operator-Token</code>.</p>
+<h3>Dashboard</h3>
+<p>Frontend в <code>apps/dashboard</code> написан на React 19, TypeScript и Vite. Интерфейс имеет страницы обзора, видеоаналитики, AI vs Fixed-Time и ROI calibration. Реализованы DEMO/REAL switch, WebSocket telemetry, emergency, policy switch, export JSON, выбор backend URL и operator token.</p>
+<table><tr><th>Frontend library</th><th>Использование</th></tr><tr><td>React / React DOM</td><td>Компонентный интерфейс и состояние</td></tr><tr><td>Vite</td><td>Dev server и production build</td></tr><tr><td>TypeScript</td><td>Типы dashboard и API contracts</td></tr><tr><td>lucide-react</td><td>Иконки интерфейса</td></tr><tr><td>Vitest</td><td>Unit-тесты domain telemetry</td></tr><tr><td>Playwright</td><td>E2E и responsive проверки</td></tr></table>
+<div class="footer">RohAI — полный технический отчет · 11</div>
+</section>
+
+<section class="page">
+<h2>11. Библиотеки и технологии</h2>
+<table><tr><th>Область</th><th>Библиотеки / инструменты</th><th>Назначение</th></tr>
+<tr><td>Python API</td><td>FastAPI, Uvicorn</td><td>HTTP, WebSocket, ASGI lifecycle</td></tr>
+<tr><td>Модели данных</td><td>Pydantic, pydantic-settings</td><td>Валидация контрактов и env configuration</td></tr>
+<tr><td>Vision</td><td>Ultralytics, YOLO26n, ByteTrack</td><td>Object detection and tracking</td></tr>
+<tr><td>Видео и численные данные</td><td>OpenCV, NumPy</td><td>Decode, frame processing, masks, image output</td></tr>
+<tr><td>Association dependency</td><td>LAP</td><td>Зависимость vision tracking stack</td></tr>
+<tr><td>Quality</td><td>pytest, httpx, Ruff, mypy</td><td>Tests, API client, lint, strict typing</td></tr>
+<tr><td>Frontend</td><td>React 19, TypeScript, Vite, lucide-react</td><td>Operator dashboard</td></tr>
+<tr><td>Frontend quality</td><td>Vitest, Playwright, ESLint</td><td>Unit, E2E and static checks</td></tr>
+<tr><td>Environment</td><td>uv, uv.lock, Python 3.12+, Node >=22.12</td><td>Reproducible installation and builds</td></tr></table>
+<h3>Зависимости разработки</h3>
+<p>В root dev group находятся pytest, httpx, ruff и mypy. Vision включается optional extra, поэтому simulation может работать без тяжелого inference stack. Конфигурация Ruff ограничивает строку 100 символами, а mypy работает в strict mode.</p>
+<h3>Безопасность поставки модели</h3>
+<p>Загрузчик модели проверяет SHA-256 и сохраняет metadata. В документации указан hash активной YOLO26n и источник Ultralytics. Веса запускаются локально; сеть нужна источнику видео RTSP или загрузчику, а не каждому inference кадру.</p>
+<div class="footer">RohAI — полный технический отчет · 12</div>
+</section>
+
+<section class="page">
+<h2>12. Что именно сейчас «обучено»</h2>
+<p>На основании исходников и документации корректный ответ такой: в проекте сейчас используется готовая предварительно обученная YOLO26n, но сам репозиторий не содержит процесса ее обучения или fine-tuning. Файл веса присутствует как готовый asset. Код выполняет inference и tracking, а не train.</p>
+<h3>В проекте отсутствуют</h3>
+<ul><li>train script и dataset loader;</li><li>собственная разметка bounding boxes или track IDs;</li><li>train/validation/test manifests с фактическими данными;</li><li>optimizer, loss, epochs, checkpoints и scheduler;</li><li>precision, recall, mAP, ID-switch benchmark;</li><li>размеченный benchmark ошибки queue length;</li><li>обученная policy network для выбора сигналов;</li><li>reinforcement learning environment и reward optimization.</li></ul>
+<h3>Что является уникальным в текущей реализации</h3>
+<p>Уникальность проекта сейчас находится прежде всего в инженерной связке, а не в уникальных весах модели: собственные контракты TrafficState, safety state machine, geometry-aware queue analytics, bounded pipeline, deterministic simulator, paired benchmark и dashboard. Synthetic detector — контролируемая fixture для тестов, не новая обученная модель.</p>
+<div class="note"><b>Честная формулировка для презентации:</b> «Мы интегрировали готовую YOLO26n с собственным tracking/geometry/queue pipeline и собственным safety-first контуром адаптивного управления». Нельзя утверждать, что YOLO26 обучена на уникальных данных RohAI, пока это не подтверждено экспериментом и артефактами обучения.</div>
+<p>В документации datasets прямо сказано, что локальные датасеты и веса не входят в Git, а каталог описывает будущие правила хранения. Поэтому информации о размере собственного набора, числе классов, split, эпохах и качестве обучения в репозитории нет.</p>
+<div class="footer">RohAI — полный технический отчет · 13</div>
+</section>
+
+<section class="page">
+<h2>13. Как правильно обучить собственный ИИ</h2>
+<h3>Этап A. Собственный vision dataset</h3>
+<ol><li>Собрать видео именно с целевых камер, разных сезонов, освещения, дождя, ночи, перекрытий и плотности потока.</li><li>Не смешивать соседние кадры одного ролика между train, validation и test. Разделять по видео/сценарию.</li><li>Разметить car, bus, truck, motorcycle, bicycle, pedestrian и при необходимости lane/queue attributes.</li><li>Для tracking добавить consistent object IDs хотя бы на validation/test роликах.</li><li>Для очереди разметить stop line, queue polygons и состояние queued/waiting; для физической длины добавить calibration/homography.</li><li>Сохранить manifest, источник, лицензию, checksum, split и версию разметки в <code>datasets/</code>.</li></ol>
+<h3>Этап B. Fine-tuning detector</h3>
+<p>Начинать следует с transfer learning от YOLO26n, а не с обучения с нуля. Подготовить конфигурацию классов, запустить несколько controlled experiments и сравнить baseline готовых весов с fine-tuned model на неизменном test set. Сохранять checkpoint, config, seed, commit hash и метрики.</p>
+<p>Обязательные метрики: precision, recall, mAP50, mAP50-95 по каждому классу и отдельно по условиям. Для tracking: IDF1, MOTA/HOTA, ID switches и fragmentations. Для очереди: precision/recall queued objects, MAE/RMSE queue count и error estimated length.</p>
+<h3>Этап C. Проверка интеграции</h3>
+<p>После обучения detector нельзя автоматически объявлять control-ready. Сначала прогнать pipeline, затем replay с известными сигналами, затем closed-loop simulation. Сравнить false positives, missed vehicles, ID resets и задержку. Только после этого можно рассматривать улучшение decision policy.</p>
+<div class="footer">RohAI — полный технический отчет · 14</div>
+</section>
+
+<section class="page">
+<h2>14. Как обучать именно управление светофором</h2>
+<p>Если цель — сделать не только vision, но и обучаемый control AI, обучение должно идти в отдельном simulation environment. Safety нельзя отдавать нейросети. Policy должна получать state и предлагать действие: фазу, продление или длительность. SafetyController ограничивает действие допустимыми переходами.</p>
+<h3>Вариант 1: supervised / imitation learning</h3>
+<p>Сначала собрать эталонные решения из сильного rule-based optimizer или MPC на множестве сценариев. Обучить policy повторять действие учителя. Плюс метода — устойчивый старт и понятная проверка. Минус — модель наследует ошибки учителя.</p>
+<h3>Вариант 2: reinforcement learning</h3>
+<p>Определить observation: очереди, arrivals, waits, phase, elapsed, emergency state и confidence. Action ограничить небольшим набором допустимых продлений/переключений. Reward строить из уменьшения waiting, queue и остановок, с большими штрафами за starvation, unsafe request и нарушение fairness. Environment должен использовать разные seeds, demand patterns, missing detections и sensor noise.</p>
+<pre>reward = - alpha * total_wait
+         - beta * queue_length
+         - gamma * phase_switch_cost
+         - penalty_for_starvation
+         - very_large_penalty_for_unsafe_action</pre>
+<p>Оценивать policy нужно на новых seeds и сценариях, не только на тех, где она обучалась. Сравнение с Fixed-Time и текущей Adaptive heuristic должно быть paired и статистическим. Отдельно проверять worst-case, pedestrian fairness, emergency response и восстановление после sensor failure.</p>
+<div class="note"><b>Приоритет:</b> сначала сделать датасет и метрики perception, затем расширить simulator, затем обучать policy. Иначе будет невозможно понять, улучшение произошло из-за модели, симулятора или ошибки измерения.</div>
+<h3>Проверки и ближайшая дорожная карта</h3>
+<ul><li>Документированы pytest, strict mypy и Ruff; vision verification обработала 1024 кадра двух роликов, а backend pipeline показал 377/377/377/377 стадий без drops.</li><li>Следующие шаги: manifest и собственная разметка, reproducible training/evaluation, benchmark с разными seeds и confidence intervals, homography, ESP32 ACK/heartbeat/watchdog и hardware-in-the-loop.</li></ul>
+<p>Итоговая оценка: RohAI уже является связным прототипом с предметным ядром, симулятором, YOLO/ByteTrack pipeline, safety-контуром, API и dashboard. Главный пробел — собственное обучение: сейчас используется готовая модель и самописная эвристика. Уникальные данные и fine-tuning нужно подтвердить отдельными артефактами и метриками.</p>
+<div class="good"><b>Файл подготовлен как единый Word-совместимый отчет.</b> Откройте его в Microsoft Word или браузере; для фиксированных 15 страниц используйте печать/экспорт в PDF с форматом A4 и масштабом 100%.</div>
+<div class="footer">RohAI — полный технический отчет · 14</div>
+</section>
+
+</body>
+</html>

@@ -6,11 +6,19 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 import cv2
-from traffic_core.models import Phase, SignalStage, SignalState, TrafficState
+from traffic_core.models import (
+    ObservationEvidence,
+    ObservationStatus,
+    Phase,
+    SignalStage,
+    SignalState,
+    TrafficState,
+)
 
 from traffic_vision.analytics import TrafficAnalyzer
 from traffic_vision.detector import Detector
-from traffic_vision.models import AnalysisSnapshot, Detection, PipelineStatus
+from traffic_vision.health import PerceptionHealthMonitor
+from traffic_vision.models import AnalysisSnapshot, Detection, DirectionMetrics, PipelineStatus
 from traffic_vision.overlay import DebugOverlay
 from traffic_vision.settings import VisionSettings
 from traffic_vision.sources import Image, VideoFrame, VideoSource
@@ -19,8 +27,6 @@ logger = logging.getLogger(__name__)
 
 
 class LatestSlot[T]:
-    """Capacity one, replacing old work. Closing drains the final item before EOF."""
-
     def __init__(self) -> None:
         self._condition = threading.Condition()
         self._value: T | None = None
@@ -62,6 +68,10 @@ class AnalyzedFrame:
     analysis: AnalysisSnapshot
     core_state: TrafficState
 
+    @property
+    def captured_at(self) -> float:
+        return self.video.captured_at
+
 
 @dataclass(frozen=True)
 class PublishedFrame:
@@ -102,17 +112,27 @@ class VisionPipeline:
         self._lock = threading.Lock()
         self._threads: list[threading.Thread] = []
         self._latest: PublishedFrame | None = None
+        self._latest_analysis: AnalyzedFrame | None = None
         self._state = "starting"
         self._error: str | None = None
         self._counts = [0, 0, 0, 0]
         self._stale_drops = 0
         self._publication_times: deque[float] = deque(maxlen=30)
         self._latency_ms = 0.0
+        self.health_monitor = PerceptionHealthMonitor(settings.health)
+        self._heartbeats: dict[str, float] = {}
+        self._heartbeat_timestamps: dict[str, float] = {}
+        self._connected = False
 
     @property
     def latest(self) -> PublishedFrame | None:
         with self._lock:
             return self._latest
+
+    @property
+    def latest_analysis(self) -> AnalyzedFrame | None:
+        with self._lock:
+            return self._latest_analysis
 
     def status(self) -> PipelineStatus:
         with self._lock:
@@ -122,6 +142,7 @@ class VisionPipeline:
                 if len(times) > 1 and times[-1] > times[0]
                 else 0
             )
+
             return PipelineStatus.model_validate(
                 {
                     "state": self._state,
@@ -137,6 +158,90 @@ class VisionPipeline:
                     "error": self._error,
                 }
             )
+
+    def heartbeat_timestamps(self) -> dict[str, float]:
+        with self._lock:
+            return dict(self._heartbeat_timestamps)
+
+    def observation(self, now: float | None = None) -> AnalysisSnapshot | None:
+        """Refresh evidence even when workers no longer produce frames."""
+        latest = self.latest_analysis
+        if latest is None:
+            return None
+        now = time.monotonic() if now is None else now
+        status = self.status().state
+        with self._lock:
+            beats = dict(self._heartbeats)
+        age = max(0, now - latest.captured_at)
+        directions = {}
+        for key, metric in latest.analysis.traffic.directions.items():
+            evidence = metric.observation
+            checks = dict(evidence.camera_health)
+            checks.update(
+                {
+                    "camera_connected": self._connected and self.source.connected,
+                    "frame_fresh": age
+                    <= min(self.settings.stale_seconds, self.settings.health.stale_seconds),
+                    "inference_alive": now - beats.get("inference", float("-inf"))
+                    <= self.settings.health.stage_timeout_seconds,
+                    "analytics_alive": now - beats.get("analytics", float("-inf"))
+                    <= self.settings.health.stage_timeout_seconds,
+                }
+            )
+            reasons = list(evidence.failure_reasons)
+            state = evidence.observation_status
+            alignment_stale = self.analyzer.geometry.camera_calibration is not None and age > 0.5
+            if alignment_stale:
+                checks["calibration_fresh"] = False
+                reasons.append("alignment_evidence_stale")
+                state = ObservationStatus.DEGRADED
+            if not checks["frame_fresh"]:
+                state = ObservationStatus.STALE
+                reasons.append("frame_stale")
+            if status in ("failed", "ended", "stopped") or not checks["camera_connected"]:
+                state = ObservationStatus.FAILED
+                reasons.append("camera_or_pipeline_stopped")
+            if not checks["inference_alive"] or not checks["analytics_alive"]:
+                state = ObservationStatus.FAILED
+                reasons.append("perception_stage_timeout")
+            refreshed = ObservationEvidence.model_validate(
+                {
+                    **evidence.model_dump(),
+                    "observation_status": state,
+                    "calibration_status": "suspect"
+                    if alignment_stale
+                    else evidence.calibration_status,
+                    "measurement_age_ms": age * 1000,
+                    "camera_health": checks,
+                    "failure_reasons": tuple(dict.fromkeys(reasons)),
+                    "measurement_confidence": evidence.measurement_confidence if not reasons else 0,
+                    "uncertainty": evidence.uncertainty.model_copy(
+                        update={
+                            "observation_confidence": evidence.uncertainty.observation_confidence
+                            if not reasons
+                            else 0
+                        }
+                    ),
+                }
+            )
+            directions[key] = DirectionMetrics.model_validate(
+                {**metric.model_dump(), "observation": refreshed}
+            )
+        estimation = latest.analysis.traffic.estimation
+        if estimation is not None and any(not m.observation.reliable for m in directions.values()):
+            estimation = estimation.unavailable(
+                "observation_unreliable",
+                calibration_status="SUSPECT"
+                if age > 0.5 and self.analyzer.geometry.camera_calibration is not None
+                else None,
+            )
+        return latest.analysis.model_copy(
+            update={
+                "traffic": latest.analysis.traffic.model_copy(
+                    update={"directions": directions, "estimation": estimation}
+                )
+            }
+        )
 
     def start(self) -> None:
         if self._threads:
@@ -156,6 +261,8 @@ class VisionPipeline:
             pass
         except Exception:
             logger.exception("Vision stage failed: %s", stage.__name__)
+            if stage == self._publish_loop:
+                return  # Preview failures never cancel measurement or control workers.
             with self._lock:
                 self._state = "failed"
                 self._error = f"{stage.__name__} failed; see backend log"
@@ -169,6 +276,7 @@ class VisionPipeline:
             if self._stop.is_set():
                 return
             self.source.open()
+            self._connected = True
             start = time.monotonic()
             media_start: float | None = None
             while not self._stop.is_set():
@@ -183,8 +291,11 @@ class VisionPipeline:
                     break
                 with self._lock:
                     self._counts[0] += 1
+                    self._heartbeats["capture"] = time.monotonic()
+                    self._heartbeat_timestamps["frame"] = time.time()
                 self._capture.put(frame)
         finally:
+            self._connected = False
             self.source.close()
             self._capture.close()
 
@@ -201,6 +312,8 @@ class VisionPipeline:
                 detections = self.detector.process(frame)
                 with self._lock:
                     self._counts[1] += 1
+                    self._heartbeats["inference"] = time.monotonic()
+                    self._heartbeat_timestamps["inference"] = time.time()
                 self._inferred.put(InferredFrame(frame, detections))
         finally:
             self.detector.close()
@@ -220,14 +333,23 @@ class VisionPipeline:
                     width=width,
                     height=height,
                     stream_epoch=frame.stream_epoch,
+                    health=self.health_monitor.inspect(
+                        frame, self.analyzer.geometry, time.monotonic()
+                    ),
                 )
+                analyzed = AnalyzedFrame(frame, analysis, self.analyzer.to_core_state(analysis))
                 with self._lock:
+                    self._latest_analysis = analyzed
+                    self._state = "running"
                     self._counts[2] += 1
-                self._analyzed.put(
-                    AnalyzedFrame(frame, analysis, self.analyzer.to_core_state(analysis))
-                )
+                    self._heartbeats["analytics"] = time.monotonic()
+                    self._heartbeat_timestamps["analytics_update"] = time.time()
+                self._analyzed.put(analyzed)
         finally:
             self._analyzed.close()
+            with self._lock:
+                if self._state != "failed":
+                    self._state = "stopped" if self._stop.is_set() else "ended"
 
     def _publish_loop(self) -> None:
         try:
@@ -258,13 +380,10 @@ class VisionPipeline:
                     if self._stop.is_set():
                         break
                     self._latest = published
-                    self._state = "running"
                     self._counts[3] += 1
                     self._publication_times.append(now)
         finally:
-            with self._lock:
-                if self._state != "failed":
-                    self._state = "stopped" if self._stop.is_set() else "ended"
+            pass
 
     def _cancel(self) -> None:
         self._stop.set()

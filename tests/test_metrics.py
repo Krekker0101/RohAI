@@ -22,6 +22,7 @@ def test_exact_delay_includes_unserved_queue() -> None:
     simulator.advance(10, red)
     assert simulator.kpi().total_wait_seconds == 20
     north = simulator.snapshot().approaches[0]
+    assert north.counts is not None
     assert north.counts.buses == 1
     assert north.traffic_score == 3.0
     green = SignalState(phase=Phase.NS, stage=SignalStage.GREEN, elapsed_seconds=0)

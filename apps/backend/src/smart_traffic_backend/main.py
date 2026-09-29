@@ -15,11 +15,18 @@ from traffic_core.ports import HardwareController
 from traffic_simulator.comparison import ComparisonRequest, ComparisonResult, compare
 from traffic_vision.geometry import GeometryStore, IntersectionGeometry
 from traffic_vision.models import PipelineStatus, VisionTrafficState
+from traffic_vision.validation import BenchmarkReport, BenchmarkRequest, benchmark
 
 from smart_traffic_backend.config import Settings
 from smart_traffic_backend.demo_runtime import DEMO_SOURCE_ID, DemoRuntime
 from smart_traffic_backend.hardware import MockHardwareController
 from smart_traffic_backend.runtime import Runtime
+from smart_traffic_backend.safety_architecture import (
+    DecisionAudit,
+    LearnedPolicyProposer,
+    PolicyMode,
+    SafetyStatus,
+)
 from smart_traffic_backend.vision_runtime import VisionRuntime, VisionTelemetry
 
 
@@ -35,6 +42,10 @@ class EmergencyResponse(Model):
 
 class PolicyRequest(Model):
     policy: Policy
+
+
+class PolicyModeRequest(Model):
+    mode: PolicyMode
 
 
 class SystemInfo(Model):
@@ -69,7 +80,9 @@ def require_operator(
 
 
 def create_app(
-    settings: Settings | None = None, hardware: HardwareController | None = None
+    settings: Settings | None = None,
+    hardware: HardwareController | None = None,
+    policy_proposer: LearnedPolicyProposer | None = None,
 ) -> FastAPI:
     config = settings if settings is not None else Settings()
 
@@ -84,6 +97,7 @@ def create_app(
             if config.mode == "simulation"
             else VisionRuntime(config, adapter)
         )
+        runtime.policy_proposer = policy_proposer
         demo_runtime = DemoRuntime(config)
         app.state.runtime = runtime
         app.state.demo_runtime = demo_runtime
@@ -225,8 +239,8 @@ def create_app(
     async def set_policy(body: PolicyRequest, runtime: RuntimeDep) -> dict[str, str]:
         if config.mode == "calibration":
             raise HTTPException(status_code=409, detail="Control is disabled during calibration")
-        if not runtime.ready:
-            raise HTTPException(status_code=503, detail="Controller is not ready")
+        if not runtime.ready or (isinstance(runtime, VisionRuntime) and not runtime.control_ready):
+            raise HTTPException(status_code=503, detail="Controller has no reliable observation")
         # The next decision uses this policy; the independent safety machine keeps its phase.
         if isinstance(runtime, Runtime):
             runtime.engine.controller.policy = body.policy
@@ -246,14 +260,73 @@ def create_app(
             content={
                 "status": "ready" if healthy else "not_ready",
                 "mode": config.mode,
+                "control_ready": runtime.control_ready
+                if isinstance(runtime, VisionRuntime)
+                else runtime.ready,
                 "hardware": type(runtime.hardware).__name__,
                 "failure": runtime.failure,
+                "recovery_state": runtime.recovery.state.value,
+                "physical_production_ready": runtime.health.physical_production_ready,
             },
         )
 
+    @app.get("/api/v1/safety/status", response_model=SafetyStatus, tags=["safety"])
+    def safety_status(runtime: RuntimeDep) -> SafetyStatus:
+        return runtime.safety_status()
+
+    @app.get("/api/v1/safety/decisions", response_model=list[DecisionAudit], tags=["safety"])
+    def safety_decisions(runtime: RuntimeDep) -> list[DecisionAudit]:
+        return list(runtime.decision_journal.snapshot())
+
+    @app.put(
+        "/api/v1/safety/policy-mode", dependencies=[Depends(require_operator)], tags=["safety"]
+    )
+    def set_policy_mode(body: PolicyModeRequest, runtime: RuntimeDep) -> dict[str, str]:
+        try:
+            runtime.configure_policy(body.mode, runtime.policy_proposer)
+        except (PermissionError, ValueError) as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        return {"status": "accepted", "mode": body.mode.value}
+
+    @app.post(
+        "/api/v1/safety/recovery/begin", dependencies=[Depends(require_operator)], tags=["safety"]
+    )
+    def begin_recovery(runtime: RuntimeDep) -> dict[str, str]:
+        if not isinstance(runtime, VisionRuntime):
+            raise HTTPException(status_code=409, detail="Vision recovery checks are unavailable")
+        try:
+            runtime.begin_recovery()
+        except RuntimeError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        return {"status": "recovering"}
+
+    @app.post(
+        "/api/v1/safety/recovery/check", dependencies=[Depends(require_operator)], tags=["safety"]
+    )
+    def check_recovery(runtime: RuntimeDep) -> dict[str, object]:
+        if not isinstance(runtime, VisionRuntime):
+            raise HTTPException(status_code=409, detail="Vision recovery checks are unavailable")
+        try:
+            checks = runtime.qualify_recovery()
+        except RuntimeError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        return {"status": runtime.recovery.state.value, "checks": checks.model_dump()}
+
+    @app.post(
+        "/api/v1/safety/recovery/confirm", dependencies=[Depends(require_operator)], tags=["safety"]
+    )
+    def confirm_recovery(runtime: RuntimeDep) -> dict[str, str]:
+        if not isinstance(runtime, VisionRuntime):
+            raise HTTPException(status_code=409, detail="Vision recovery checks are unavailable")
+        try:
+            runtime.confirm_recovery()
+        except RuntimeError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        return {"status": runtime.recovery.state.value, "policy_mode": runtime.policy_mode.value}
+
     @app.get("/api/v1/state", response_model=Telemetry | VisionTelemetry, tags=["telemetry"])
     async def state(runtime: RuntimeDep) -> Telemetry | VisionTelemetry:
-        return runtime.latest
+        return runtime._snapshot() if isinstance(runtime, VisionRuntime) else runtime.latest
 
     @app.post(
         "/api/v1/emergency",
@@ -264,8 +337,8 @@ def create_app(
     async def emergency(body: EmergencyRequest, runtime: RuntimeDep) -> EmergencyResponse:
         if config.mode == "calibration":
             raise HTTPException(status_code=409, detail="Control is disabled during calibration")
-        if not runtime.ready:
-            raise HTTPException(status_code=503, detail="Controller is not ready")
+        if not runtime.ready or (isinstance(runtime, VisionRuntime) and not runtime.control_ready):
+            raise HTTPException(status_code=503, detail="Controller has no reliable observation")
         runtime.engine.set_emergency(phase_for(body.direction), body.ttl_seconds)
         logging.getLogger(__name__).warning(
             "Emergency priority requested: direction=%s ttl=%s", body.direction, body.ttl_seconds
@@ -315,6 +388,15 @@ def create_app(
         finally:
             await events.aclose()
 
+    @app.post(
+        "/api/v1/vision/benchmark",
+        response_model=BenchmarkReport,
+        dependencies=[Depends(require_operator)],
+        tags=["validation"],
+    )
+    def state_benchmark(body: BenchmarkRequest) -> BenchmarkReport:
+        return benchmark(body)
+
     @app.get("/api/v1/vision/status", response_model=PipelineStatus, tags=["vision"])
     async def vision_status(runtime: RuntimeDep) -> PipelineStatus:
         if not isinstance(runtime, VisionRuntime):
@@ -325,16 +407,17 @@ def create_app(
     async def vision_state(runtime: RuntimeDep) -> VisionTrafficState:
         if not isinstance(runtime, VisionRuntime) or not runtime.ready:
             raise HTTPException(status_code=503, detail="No fresh vision state")
-        latest = runtime.pipeline.latest
-        assert latest is not None
-        return latest.analysis.traffic
+        observed = runtime.pipeline.observation()
+        assert observed is not None
+        return observed.traffic
 
     @app.get("/api/v1/vision/frame.jpg", tags=["vision"])
     async def vision_frame(runtime: RuntimeDep) -> Response:
         if not isinstance(runtime, VisionRuntime) or not runtime.ready:
             raise HTTPException(status_code=503, detail="No fresh vision frame")
         latest = runtime.pipeline.latest
-        assert latest is not None
+        if latest is None:
+            raise HTTPException(status_code=503, detail="Preview unavailable")
         return Response(latest.jpeg, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
     @app.get("/api/v1/vision/stream", tags=["vision"])

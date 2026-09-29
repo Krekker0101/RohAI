@@ -7,18 +7,10 @@ import numpy as np
 from traffic_core.models import ObjectKind
 
 from traffic_vision.contracts import BoundingBox
+from traffic_vision.manifest import ModelManifest
 from traffic_vision.models import Detection
 from traffic_vision.settings import VisionSettings
 from traffic_vision.sources import SYNTHETIC_COLORS, VideoFrame
-
-COCO_CLASSES = {
-    0: ObjectKind.PEDESTRIAN,
-    1: ObjectKind.BICYCLE,
-    2: ObjectKind.CAR,
-    3: ObjectKind.MOTORCYCLE,
-    5: ObjectKind.BUS,
-    7: ObjectKind.TRUCK,
-}
 
 
 class Detector(Protocol):
@@ -38,6 +30,7 @@ class YOLODetector:
 
     def __init__(self, settings: VisionSettings) -> None:
         self.settings = settings
+        self.manifest: ModelManifest | None = None
         self._model: Any = None
         self._stream: tuple[str, int] | None = None
         self._last_timestamp: float | None = None
@@ -45,10 +38,36 @@ class YOLODetector:
         self._next_identity = 1
 
     def open(self) -> None:
+        if self.settings.model_registry is not None:
+            from traffic_vision.training.registry import ModelRegistry
+
+            self.settings = self.settings.model_copy(
+                update={
+                    "model_package": ModelRegistry(self.settings.model_registry).production(),
+                    "model_registry": None,
+                }
+            )
+        if self.settings.model_package is not None:
+            from traffic_vision.training.package import verify_package
+
+            package = verify_package(self.settings.model_package)
+            if package.supported_input.image_size != self.settings.image_size:
+                raise ValueError("ModelPackage input size mismatch")
+            self.settings = self.settings.model_copy(
+                update={
+                    "model_path": self.settings.model_package / "weights.pt",
+                    "manifest_path": self.settings.model_package / "model.json",
+                }
+            )
         if not self.settings.model_path.is_file():
             raise FileNotFoundError(
                 f"Model missing: {self.settings.model_path}; run scripts/fetch_vision_demo.py"
             )
+        self.manifest = ModelManifest.load(self.settings.manifest_path)
+        # Verify integrity before deserializing any trusted checkpoint.
+        self.manifest.validate_model(
+            self.manifest.class_id_mapping, self.settings.model_path, self.settings.image_size
+        )
         config_root = Path(os.environ.get("YOLO_CONFIG_DIR", self.settings.runtime_directory))
         config_root.mkdir(parents=True, exist_ok=True)
         os.environ.setdefault("YOLO_CONFIG_DIR", str(config_root.resolve()))
@@ -59,6 +78,9 @@ class YOLODetector:
 
         torch.set_num_threads(self.settings.torch_threads)
         self._model = YOLO(str(self.settings.model_path), task="detect")
+        self.manifest.validate_model(
+            dict(self._model.names), self.settings.model_path, self.settings.image_size
+        )
         self._model.predict(
             np.zeros((self.settings.image_size, self.settings.image_size, 3), dtype=np.uint8),
             imgsz=self.settings.image_size,
@@ -67,7 +89,7 @@ class YOLODetector:
         )
 
     def process(self, frame: VideoFrame) -> tuple[Detection, ...]:
-        if self._model is None:
+        if self._model is None or self.manifest is None:
             raise RuntimeError("Detector is not open")
         stream = (frame.source_id, frame.stream_epoch)
         discontinuity = self._last_timestamp is not None and (
@@ -87,7 +109,11 @@ class YOLODetector:
             tracker=str(Path(__file__).with_name("bytetrack.yaml")),
             conf=self.settings.confidence,
             iou=self.settings.iou,
-            classes=list(COCO_CLASSES),
+            classes=[
+                i
+                for i, name in self.manifest.class_id_mapping.items()
+                if self.manifest.domain_mapping[name] != ObjectKind.UNKNOWN
+            ],
             imgsz=self.settings.image_size,
             device=self.settings.device,
             max_det=self.settings.max_detections,
@@ -105,7 +131,10 @@ class YOLODetector:
         for index, (xyxy, confidence, class_id) in enumerate(
             zip(coordinates, confidences, classes, strict=True)
         ):
-            kind = COCO_CLASSES.get(int(class_id))
+            name = self.manifest.class_id_mapping.get(int(class_id))
+            if name is None:
+                raise ValueError("Unexpected inference class ID")
+            kind = self.manifest.domain_mapping[name]
             x1, y1, x2, y2 = (float(v) for v in xyxy)
             x1, x2 = max(0, min(width, x1)), max(0, min(width, x2))
             y1, y2 = max(0, min(height, y1)), max(0, min(height, y2))

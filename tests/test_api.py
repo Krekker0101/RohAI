@@ -26,6 +26,18 @@ def test_health_telemetry_websocket_and_shutdown() -> None:
     assert hardware.last_signal.stage == SignalStage.ALL_RED
 
 
+def test_safety_api_never_claims_physical_readiness_or_allows_active_policy() -> None:
+    app = create_app(Settings())
+    with TestClient(app) as client:
+        status = client.get("/api/v1/safety/status")
+        assert status.status_code == 200
+        payload = status.json()
+        assert payload["health"]["physical_production_ready"] is False
+        assert payload["hardware_state"]["physically_confirmed"] is None
+        assert client.put("/api/v1/safety/policy-mode", json={"mode": "ACTIVE"}).status_code == 409
+        assert client.get("/api/v1/safety/decisions").json() == []
+
+
 def test_operator_auth_validation_and_comparison() -> None:
     app = create_app(Settings(operator_token=SecretStr("test-secret")))
     with TestClient(app) as client:

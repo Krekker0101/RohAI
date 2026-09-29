@@ -130,6 +130,8 @@ class DemoRuntime:
 
     def _snapshot(self, telemetry: Telemetry) -> VisionTelemetry:
         traffic = telemetry.traffic
+        assert traffic.pedestrians_waiting is not None
+        assert traffic.pedestrian_oldest_wait_seconds is not None
         pedestrian_counts = [traffic.pedestrians_waiting // 4] * 4
         for i in range(traffic.pedestrians_waiting % 4):
             pedestrian_counts[i] += 1
@@ -138,7 +140,12 @@ class DemoRuntime:
         tracks: list[TrackSnapshot] = []
         for lane_index, approach in enumerate(traffic.approaches):
             counts = approach.counts
+            assert counts is not None
+            assert approach.queue_length is not None
+            assert approach.arrival_rate_per_minute is not None
+            assert approach.congestion is not None
             directions[approach.direction.value] = DirectionMetrics(
+                observation=approach.observation,
                 car_count=counts.cars,
                 bus_count=counts.buses,
                 truck_count=counts.trucks,
@@ -216,6 +223,8 @@ class DemoRuntime:
             error=self.failure,
         )
         return VisionTelemetry(
+            schema_version="2.0-vision",
+            control_ready=True,
             sequence=telemetry.sequence,
             mode="demo",
             traffic=vision,
@@ -232,6 +241,9 @@ class DemoRuntime:
     @staticmethod
     def _tracks_for(approach: ApproachState, lane_index: int, now: float) -> list[TrackSnapshot]:
         counts = approach.counts
+        assert counts is not None
+        assert approach.mean_wait_seconds is not None
+        assert approach.oldest_wait_seconds is not None
         kinds: list[ObjectKind] = []
         kinds.extend([ObjectKind.CAR] * counts.cars)
         kinds.extend([ObjectKind.BUS] * counts.buses)
@@ -325,8 +337,7 @@ class DemoRuntime:
             y += 30
 
         light_summary = " · ".join(
-            f"{name[0].upper()}:{lamp.value[0].upper()}"
-            for name, lamp in snapshot.lamps.items()
+            f"{name[0].upper()}:{lamp.value[0].upper()}" for name, lamp in snapshot.lamps.items()
         )
         safe_phase = html.escape(phase)
         safe_stage = html.escape(stage)

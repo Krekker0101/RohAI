@@ -7,6 +7,15 @@ from traffic_core.models import Model
 
 class AnalyticsSettings(Model):
     slow_speed_px_per_second: float = Field(default=12, gt=0)
+    motion_window_seconds: float = Field(default=0.5, gt=0, le=5)
+    stop_confirmation_seconds: float = Field(default=0.2, gt=0)
+    max_motion_gap_seconds: float = Field(default=1.5, gt=0)
+    occlusion_hold_seconds: float = Field(default=1.5, gt=0)
+    prediction_after_seconds: float = Field(default=0.5, ge=0)
+    lost_uncertainty_seconds: float = Field(default=5, gt=0)
+    id_recovery_distance_px: float = Field(default=25, gt=0)
+    min_detection_confidence: float = Field(default=0.25, gt=0, le=1)
+    jitter_tolerance_px: float = Field(default=2, ge=0)
     slow_frames: int = Field(default=3, ge=2, le=120)
     max_observation_gap_seconds: float = Field(default=0.75, gt=0, le=10)
     lost_track_seconds: float = Field(default=3, gt=0, le=60)
@@ -24,7 +33,25 @@ class AnalyticsSettings(Model):
             raise ValueError("Track TTL must cover the maximum observation gap")
         if self.high_queue <= self.moderate_queue:
             raise ValueError("high_queue must exceed moderate_queue")
+        if self.lost_track_seconds < self.occlusion_hold_seconds:
+            raise ValueError("Track lifetime must cover occlusion hold")
+        if self.prediction_after_seconds > self.occlusion_hold_seconds:
+            raise ValueError("Prediction delay must not exceed hold")
         return self
+
+
+class PerceptionHealthSettings(Model):
+    stale_seconds: float = Field(default=3, gt=0)
+    minimum_fps: float = Field(default=0.8, gt=0)
+    frozen_seconds: float = Field(default=3, gt=0)
+    frozen_difference: float = Field(default=0.05, ge=0)
+    black_level: float = Field(default=3, ge=0, le=255)
+    underexposure_level: float = Field(default=12, ge=0, le=255)
+    overexposure_level: float = Field(default=250, ge=0, le=255)
+    bad_pixel_fraction: float = Field(default=0.98, gt=0, le=1)
+    minimum_laplacian_variance: float = Field(default=2, ge=0)
+    occlusion_texture_ratio: float = Field(default=0.15, gt=0, le=1)
+    stage_timeout_seconds: float = Field(default=3, gt=0)
 
 
 class VisionSettings(Model):
@@ -34,7 +61,11 @@ class VisionSettings(Model):
     webcam_index: int = Field(default=0, ge=0)
     geometry_path: Path = Path("configs/cameras/demo.json")
     calibration_directory: Path = Path("configs/cameras")
+    manifest_path: Path = Path("configs/models/yolo26n.json")
+    health: PerceptionHealthSettings = Field(default_factory=PerceptionHealthSettings)
     model_path: Path = Path("datasets/models/yolo26n.pt")
+    model_package: Path | None = None
+    model_registry: Path | None = None
     runtime_directory: Path = Path(".runtime")
     device: str = "cpu"
     image_size: int = Field(default=640, ge=256, le=1536, multiple_of=32)
@@ -57,6 +88,8 @@ class VisionSettings(Model):
 
     @model_validator(mode="after")
     def source_uri(self) -> "VisionSettings":
+        if self.model_package is not None and self.model_registry is not None:
+            raise ValueError("Select model_package or model_registry, not both")
         if self.source in ("file", "rtsp") and not self.uri:
             raise ValueError("File and RTSP sources require a uri")
         if self.source == "rtsp" and not self.uri.lower().startswith(("rtsp://", "rtsps://")):

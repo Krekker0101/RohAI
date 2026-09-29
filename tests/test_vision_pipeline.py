@@ -19,6 +19,7 @@ from traffic_core.models import SignalStage
 from traffic_vision.analytics import TrafficAnalyzer
 from traffic_vision.detector import CalibrationDetector, SyntheticDetector, YOLODetector
 from traffic_vision.geometry import load_geometry
+from traffic_vision.manifest import ModelManifest
 from traffic_vision.models import Detection
 from traffic_vision.pipeline import LatestSlot, VisionPipeline
 from traffic_vision.settings import AnalyticsSettings, VisionSettings
@@ -114,6 +115,9 @@ def test_pipeline_overload_stays_bounded_and_drains_last_frame() -> None:
     pipeline.start()
     try:
         wait_until(lambda: pipeline.status().state in ("ended", "failed"))
+        wait_until(
+            lambda: pipeline.latest is not None and pipeline.latest.analysis.traffic.frame_id == 39
+        )
         status = pipeline.status()
         assert status.state == "ended", status.error
         assert status.captured == 40 and status.dropped_capture > 0
@@ -147,10 +151,12 @@ def test_vision_api_calibration_and_eof_all_red(tmp_path: Path) -> None:
     app = create_app(settings, hardware)
     with TestClient(app) as client:
         wait_until(lambda: client.get("/health/ready").status_code == 200)
+        wait_until(lambda: client.get("/api/v1/vision/frame.jpg").status_code == 200)
         assert client.get("/api/v1/vision/frame.jpg").content.startswith(b"\xff\xd8")
         assert client.get("/api/v1/system").json()["mode"] == "vision"
-        assert client.put("/api/v1/control/policy", json={"policy": "fixed"}).status_code == 200
-        assert client.get("/api/v1/system").json()["policy"] == "fixed"
+        assert client.put("/api/v1/control/policy", json={"policy": "fixed"}).status_code == 503
+        assert client.get("/api/v1/system").json()["policy"] == "adaptive"
+        assert client.get("/api/v1/state").json()["control_ready"] is False
         state = client.get("/api/v1/vision/state").json()
         assert set(state["directions"]) == {"north", "south", "east", "west"}
         with client.websocket_connect("/ws/telemetry") as socket:
@@ -241,6 +247,7 @@ def test_yolo_adapter_uses_persistent_tracking_and_maps_reset_ids() -> None:
         return [SimpleNamespace(boxes=boxes)]
 
     detector = YOLODetector(VisionSettings())
+    detector.manifest = ModelManifest.load(Path("configs/models/yolo26n.json"))
     detector._model = SimpleNamespace(
         predictor=SimpleNamespace(trackers=[SimpleNamespace(reset=lambda: resets.append(True))]),
         track=track,
@@ -290,3 +297,22 @@ def test_stale_observation_cancels_blocked_capture_and_latches_all_red() -> None
         assert hardware.closed
 
     asyncio.run(exercise())
+
+
+def test_overlay_failure_does_not_stop_analysis(monkeypatch: pytest.MonkeyPatch) -> None:
+    pipeline = make_pipeline(SyntheticSource(frames=25, fps=10), SyntheticDetector())
+
+    def broken(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("preview deliberately unavailable")
+
+    monkeypatch.setattr(pipeline.overlay, "render", broken)
+    pipeline.start()
+    try:
+        wait_until(lambda: pipeline.status().analyzed >= 3)
+        assert pipeline.status().state == "running"
+        assert pipeline.latest is None
+        assert pipeline.latest_analysis is not None
+        assert pipeline.observation() is not None
+        assert pipeline.status().error is None
+    finally:
+        pipeline.stop()

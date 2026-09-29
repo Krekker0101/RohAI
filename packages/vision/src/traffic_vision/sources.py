@@ -30,6 +30,7 @@ class VideoSource(ABC):
         self.paced = False
         self.fps = 30.0
         self.cancelled = threading.Event()
+        self.connected = False
 
     def cancel(self) -> None:
         self.cancelled.set()
@@ -64,6 +65,7 @@ class OpenCVSource(VideoSource):
             raise OSError(f"Could not open video source '{self.source_id}'")
         fps = float(self._capture.get(cv2.CAP_PROP_FPS))
         self.fps = fps if math.isfinite(fps) and fps > 0 else 30.0
+        self.connected = True
         self._started = time.monotonic()
         self._capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
@@ -72,6 +74,7 @@ class OpenCVSource(VideoSource):
             raise RuntimeError("Source is not open")
         ok, image = self._capture.read()
         if not ok:
+            self.connected = False
             return self._on_read_failure()
         captured = time.monotonic()
         if self.paced:
@@ -96,6 +99,7 @@ class OpenCVSource(VideoSource):
         raise OSError(f"Video source '{self.source_id}' disconnected")
 
     def close(self) -> None:
+        self.connected = False
         if self._capture is not None:
             self._capture.release()
             self._capture = None
@@ -156,6 +160,7 @@ class RTSPSource(OpenCVSource):
                 continue
             ok, image = self._capture.read()
             if ok:
+                self.connected = True
                 self._epoch += 1
                 captured = time.monotonic()
                 frame = VideoFrame(
@@ -187,6 +192,7 @@ class SyntheticSource(VideoSource):
     def open(self) -> None:
         self._index = 0
         self._opened = True
+        self.connected = True
 
     def read(self) -> VideoFrame | None:
         if not self._opened:
@@ -218,6 +224,7 @@ class SyntheticSource(VideoSource):
 
     def close(self) -> None:
         self._opened = False
+        self.connected = False
 
 
 def create_source(settings: VisionSettings) -> VideoSource:

@@ -123,7 +123,10 @@ class DebugOverlay:
             ):
                 cv2.line(canvas, (x, y), (x + 10 * dx, y), color, 3)
                 cv2.line(canvas, (x, y), (x, y + 10 * dy), color, 3)
-            label = f"#{track.track_id} {track.kind.value.upper()} {track.confidence:.0%}"
+            label = (
+                f"{track.track_state.value} #{track.track_id} "
+                f"{track.kind.value.upper()} {track.confidence:.0%}"
+            )
             label_y = max(oy + 14, y1 - 8)
             label_width = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.38, 1)[0][0]
             label_x = min(x1, max(ox, ox + w - label_width - 4))
@@ -155,6 +158,16 @@ class DebugOverlay:
             if self.geometry.approach(Lane(direction)) is None:
                 text(canvas, "NOT IN CAMERA VIEW", (1220, y + 80), 0.55, MUTED)
                 text(canvas, "No traffic observation", (1220, y + 110), 0.43, MUTED)
+                continue
+            if not metrics.observation.reliable:
+                text(
+                    canvas,
+                    metrics.observation.observation_status.value,
+                    (1220, y + 80),
+                    0.48,
+                    MUTED,
+                )
+                text(canvas, "MEASUREMENT UNKNOWN", (1220, y + 110), 0.43, MUTED)
                 continue
             text(canvas, str(metrics.queue_count), (1220, y + 74), 1.3, INK, 2)
             text(canvas, "QUEUED", (1286, y + 69), 0.43, MUTED)

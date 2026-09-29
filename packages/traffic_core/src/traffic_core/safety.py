@@ -1,6 +1,6 @@
 import math
 
-from traffic_core.models import Decision, Phase, SignalStage, SignalState
+from traffic_core.models import Decision, Phase, SignalStage, SignalState, TrafficState
 from traffic_core.settings import Timing
 
 
@@ -20,6 +20,7 @@ class SafetyController:
         self.pending = Phase.NS
         self.green_seconds = timing.min_green_seconds
         self.faulted = False
+        self.observation_armed = False
 
     def snapshot(self, now: float) -> SignalState:
         return SignalState(
@@ -71,6 +72,24 @@ class SafetyController:
             if elapsed >= clearance:
                 self._enter(SignalStage.ALL_RED, now)
         return self.snapshot(now)
+
+    def accept_observation(self, state: TrafficState, now: float) -> bool:
+        """Prototype fallback: latch all-red. Recovery requires a new runtime.
+
+        This is the existing project fault behavior, not a road regulatory policy.
+        """
+        if not math.isfinite(now) or now < self.last_time:
+            raise ValueError("Safety clock must be finite and monotonic")
+        self.last_time = now
+        if any(not a.observation.reliable or a.queue_length is None for a in state.approaches):
+            if self.observation_armed:
+                self.fail_safe(now)
+            else:
+                self.stage = SignalStage.ALL_RED
+                self.entered_at = now
+            return False
+        self.observation_armed = True
+        return not self.faulted
 
     def _enter(self, stage: SignalStage, now: float) -> None:
         self.stage = stage

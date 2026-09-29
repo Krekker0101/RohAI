@@ -50,7 +50,8 @@ function numeric(value: unknown): number {
 }
 export function normalize(value: unknown): Snapshot {
   const data = object(value);
-  const vision = data.schema_version === '2.0-vision';
+  const visionV3 = data.schema_version === '3.0-vision';
+  const vision = visionV3 || data.schema_version === '2.0-vision';
   if (!vision && data.schema_version !== '1.0') throw new Error('Версия телеметрии не поддерживается');
   const traffic = data.traffic === null ? null : object(data.traffic);
   const signals = object(data.signals);
@@ -64,6 +65,9 @@ export function normalize(value: unknown): Snapshot {
     const row = vision
       ? object(object(traffic.directions)[direction])
       : object((traffic.approaches as RecordValue[]).find(a => a.direction === direction));
+    if (visionV3 && object(row.observation).observation_status !== 'OBSERVED') {
+      throw new Error(`Недостоверное наблюдение направления ${direction}: ${String(object(row.observation).observation_status)}`);
+    }
     const counts = vision ? row : object(row.counts);
     return {
       direction,
@@ -84,7 +88,7 @@ export function normalize(value: unknown): Snapshot {
     lanes, lamps: lamps as Record<string, Lamp>, signals: signals as unknown as Snapshot['signals'],
     target: numeric(data.green_target_seconds), reason: String(object(data.decision).reason),
     emergency: typeof data.emergency_phase === 'string' ? data.emergency_phase : null,
-    failure: typeof data.failure === 'string' ? data.failure : null,
+    failure: typeof data.failure === 'string' ? data.failure : visionV3 && data.control_ready !== true ? 'perception_not_control_ready' : null,
     kpi: vision ? null : data.kpi as KPI, pipeline: vision ? data.pipeline as Pipeline : null,
     tracks: vision ? data.tracks as Track[] : [],
     pedestrians: traffic ? (vision ? lanes.reduce((sum, lane) => sum + lane.counts[5], 0) : numeric(traffic.pedestrians_waiting)) : 0,

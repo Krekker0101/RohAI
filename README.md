@@ -170,10 +170,10 @@ sequenceDiagram
 ## Проверки
 
 ```powershell
-uv run --locked --extra vision ruff check .
-uv run --locked --extra vision ruff format --check .
-uv run --locked --extra vision mypy
-uv run --locked --extra vision pytest
+uv run --locked --extra vision --extra control-training ruff check .
+uv run --locked --extra vision --extra control-training ruff format --check .
+uv run --locked --extra vision --extra control-training mypy
+uv run --locked --extra vision --extra control-training pytest
 # Все проверки одной командой в PowerShell:
 ./scripts/check.ps1
 # Если локальная политика блокирует .ps1, только для отдельного процесса:
@@ -198,6 +198,11 @@ Docker (опционально): `docker build -f docker/Dockerfile -t smart-tra
 
 ## Roadmap
 
+Контролируемое обучение controller: [benchmark](docs/CONTROL_BENCHMARK_REPORT.md),
+[robustness](docs/POLICY_ROBUSTNESS_REPORT.md), [ablation](docs/POLICY_ABLATION_REPORT.md).
+Entrypoint: `scripts/training/control_experiment.py`; зависимости — extra `control-training`.
+Production default не переключается на learned policy автоматически.
+
 1. **Готово:** domain, config, backend, health, simulation, safe control, emergency,
    paired comparison, telemetry, тесты и документация.
 2. **Vision реализован:** OpenCV webcam/file/RTSP/synthetic, YOLO26 + ByteTrack,
@@ -214,3 +219,57 @@ Docker (опционально): `docker build -f docker/Dockerfile -t smart-tra
 
 Этап предназначен для демонстрационного макета. Тайминги и модель движения
 не являются проектом управления реальным дорожным перекрёстком.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Положи видео в D:\PROJECTS\RohAI\recordings\test.mp4. В терминале проекта:
+.venv\Scripts\python.exe -m traffic_vision.demo --input recordings/test.mp4 --frames 300 --show
+Результат: окно с распознаванием и recordings/vision-demo.mp4.
+Для твоей камеры нужна своя геометрия/калибровка: без неё можно проверить обнаружение машин, но не достоверность очередей и метров. Видео не проверяет эффективность управления светофором.

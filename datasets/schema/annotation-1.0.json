@@ -1,0 +1,399 @@
+{
+  "$defs": {
+    "BoundingBox": {
+      "additionalProperties": false,
+      "properties": {
+        "x1": {
+          "minimum": 0,
+          "title": "X1",
+          "type": "number"
+        },
+        "y1": {
+          "minimum": 0,
+          "title": "Y1",
+          "type": "number"
+        },
+        "x2": {
+          "minimum": 0,
+          "title": "X2",
+          "type": "number"
+        },
+        "y2": {
+          "minimum": 0,
+          "title": "Y2",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x1",
+        "y1",
+        "x2",
+        "y2"
+      ],
+      "title": "BoundingBox",
+      "type": "object"
+    },
+    "Direction": {
+      "enum": [
+        "north",
+        "south",
+        "east",
+        "west"
+      ],
+      "title": "Direction",
+      "type": "string"
+    },
+    "EventAnnotation": {
+      "additionalProperties": false,
+      "properties": {
+        "event_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "entry",
+            "stop",
+            "started_moving",
+            "joined_queue",
+            "stop_line_crossing",
+            "exit",
+            "pedestrian_arrived",
+            "pedestrian_started_crossing",
+            "pedestrian_cleared"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "timestamp": {
+          "minimum": 0,
+          "title": "Timestamp",
+          "type": "number"
+        },
+        "track_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "title": "Track Id",
+          "type": "string"
+        },
+        "approach": {
+          "$ref": "#/$defs/Direction"
+        },
+        "lane_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lane Id"
+        },
+        "uncertainty_seconds": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Uncertainty Seconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "event_id",
+        "kind",
+        "timestamp",
+        "track_id",
+        "approach"
+      ],
+      "title": "EventAnnotation",
+      "type": "object"
+    },
+    "FeatureTruth": {
+      "additionalProperties": false,
+      "properties": {
+        "feature": {
+          "title": "Feature",
+          "type": "string"
+        },
+        "approach": {
+          "$ref": "#/$defs/Direction"
+        },
+        "value": {
+          "minimum": 0,
+          "title": "Value",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "method": {
+          "enum": [
+            "manual_count",
+            "survey",
+            "timed_track",
+            "derived_reviewed"
+          ],
+          "title": "Method",
+          "type": "string"
+        }
+      },
+      "required": [
+        "feature",
+        "approach",
+        "value",
+        "unit",
+        "method"
+      ],
+      "title": "FeatureTruth",
+      "type": "object"
+    },
+    "Layer": {
+      "enum": [
+        "detection",
+        "tracking",
+        "traffic_analytics",
+        "pedestrian",
+        "calibration"
+      ],
+      "title": "Layer",
+      "type": "string"
+    },
+    "ObjectAnnotation": {
+      "additionalProperties": false,
+      "properties": {
+        "annotation_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "title": "Annotation Id",
+          "type": "string"
+        },
+        "bbox": {
+          "$ref": "#/$defs/BoundingBox"
+        },
+        "class_id": {
+          "minimum": 0,
+          "title": "Class Id",
+          "type": "integer"
+        },
+        "domain_class": {
+          "$ref": "#/$defs/ObjectKind"
+        },
+        "track_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Track Id"
+        },
+        "lane_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lane Id"
+        },
+        "approach": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Direction"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "queue_member": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Queue Member"
+        },
+        "stopped": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stopped"
+        },
+        "pedestrian_state": {
+          "anyOf": [
+            {
+              "enum": [
+                "waiting",
+                "crossing",
+                "clearing",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pedestrian State"
+        },
+        "occluded": {
+          "default": false,
+          "title": "Occluded",
+          "type": "boolean"
+        },
+        "truncated": {
+          "default": false,
+          "title": "Truncated",
+          "type": "boolean"
+        },
+        "ignore": {
+          "default": false,
+          "title": "Ignore",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "annotation_id",
+        "bbox",
+        "class_id",
+        "domain_class"
+      ],
+      "title": "ObjectAnnotation",
+      "type": "object"
+    },
+    "ObjectKind": {
+      "enum": [
+        "car",
+        "bus",
+        "truck",
+        "motorcycle",
+        "bicycle",
+        "pedestrian",
+        "emergency_vehicle",
+        "unknown"
+      ],
+      "title": "ObjectKind",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "frame_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+      "title": "Frame Id",
+      "type": "string"
+    },
+    "layers": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Layer"
+      },
+      "title": "Layers",
+      "type": "array"
+    },
+    "exhaustive_classes": {
+      "default": [],
+      "items": {
+        "type": "integer"
+      },
+      "title": "Exhaustive Classes",
+      "type": "array"
+    },
+    "provenance": {
+      "enum": [
+        "human",
+        "assisted_human_reviewed",
+        "model_predictions",
+        "synthetic_fixture",
+        "context_only"
+      ],
+      "title": "Provenance",
+      "type": "string"
+    },
+    "reviewed_by": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reviewed By"
+    },
+    "control_observable": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Control Observable"
+    },
+    "objects": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ObjectAnnotation"
+      },
+      "maxItems": 2000,
+      "title": "Objects",
+      "type": "array"
+    },
+    "events": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/EventAnnotation"
+      },
+      "maxItems": 2000,
+      "title": "Events",
+      "type": "array"
+    },
+    "traffic": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/FeatureTruth"
+      },
+      "maxItems": 512,
+      "title": "Traffic",
+      "type": "array"
+    }
+  },
+  "required": [
+    "frame_id",
+    "provenance"
+  ],
+  "title": "FrameAnnotation",
+  "type": "object"
+}

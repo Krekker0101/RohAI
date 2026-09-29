@@ -148,6 +148,7 @@ class Simulator:
             approaches.append(
                 build_approach_state(
                     direction=direction,
+                    measurement_timestamp=self.now,
                     waiting_objects=[(e.kind, self.now - e.at) for e in queue],
                     arrival_rate_per_minute=len(self.recent[direction]) * 60 / window
                     if window

@@ -1,6 +1,13 @@
 from collections.abc import Sequence
 
-from traffic_core.models import ApproachState, Congestion, Counts, Direction, ObjectKind
+from traffic_core.models import (
+    ApproachState,
+    Congestion,
+    Counts,
+    Direction,
+    ObjectKind,
+    ObservationEvidence,
+)
 
 SCORE_WEIGHTS = {
     ObjectKind.CAR: 1.0,
@@ -9,6 +16,8 @@ SCORE_WEIGHTS = {
     ObjectKind.MOTORCYCLE: 0.5,
     ObjectKind.BICYCLE: 0.4,
     ObjectKind.PEDESTRIAN: 1.0,
+    ObjectKind.EMERGENCY_VEHICLE: 1.0,
+    ObjectKind.UNKNOWN: 1.0,
 }
 
 
@@ -20,6 +29,7 @@ def build_approach_state(
     waiting_weight: float,
     moderate_queue: int,
     high_queue: int,
+    measurement_timestamp: float = 0,
 ) -> ApproachState:
     """Shared state calculation for simulated queues and future tracked observations.
 
@@ -41,6 +51,7 @@ def build_approach_state(
     )
     return ApproachState(
         direction=direction,
+        observation=ObservationEvidence.simulated(measurement_timestamp),
         counts=Counts.from_kinds(kinds),
         queue_length=size,
         traffic_score=sum(SCORE_WEIGHTS[kind] for kind in kinds) + oldest * waiting_weight,

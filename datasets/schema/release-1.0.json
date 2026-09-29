@@ -1,0 +1,549 @@
+{
+  "$defs": {
+    "Asset": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "title": "Asset",
+      "type": "object"
+    },
+    "Conditions": {
+      "additionalProperties": false,
+      "properties": {
+        "day_night": {
+          "enum": [
+            "day",
+            "night",
+            "twilight",
+            "unknown"
+          ],
+          "title": "Day Night",
+          "type": "string"
+        },
+        "weather": {
+          "enum": [
+            "dry",
+            "rain",
+            "snow",
+            "fog",
+            "mixed",
+            "unknown"
+          ],
+          "title": "Weather",
+          "type": "string"
+        },
+        "traffic_density": {
+          "enum": [
+            "low",
+            "moderate",
+            "high",
+            "unknown"
+          ],
+          "title": "Traffic Density",
+          "type": "string"
+        },
+        "occlusion": {
+          "enum": [
+            "none",
+            "light",
+            "heavy",
+            "unknown"
+          ],
+          "title": "Occlusion",
+          "type": "string"
+        },
+        "camera_angle": {
+          "enum": [
+            "overhead",
+            "oblique",
+            "low",
+            "unknown"
+          ],
+          "title": "Camera Angle",
+          "type": "string"
+        },
+        "lighting": {
+          "enum": [
+            "good",
+            "low",
+            "glare",
+            "backlit",
+            "unknown"
+          ],
+          "title": "Lighting",
+          "type": "string"
+        },
+        "tilt_degrees": {
+          "anyOf": [
+            {
+              "maximum": 90,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tilt Degrees"
+        }
+      },
+      "required": [
+        "day_night",
+        "weather",
+        "traffic_density",
+        "occlusion",
+        "camera_angle",
+        "lighting"
+      ],
+      "title": "Conditions",
+      "type": "object"
+    },
+    "DatasetSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "dataset_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "title": "Dataset Id",
+          "type": "string"
+        },
+        "version": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "title": "Version",
+          "type": "string"
+        },
+        "annotation_schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Annotation Schema Version",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "purpose": {
+          "enum": [
+            "field",
+            "synthetic_fixture"
+          ],
+          "title": "Purpose",
+          "type": "string"
+        },
+        "class_mapping": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ObjectKind"
+          },
+          "title": "Class Mapping",
+          "type": "object"
+        },
+        "sources": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SourceVideo"
+          },
+          "maxItems": 10000,
+          "title": "Sources",
+          "type": "array"
+        },
+        "frames": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/FrameRecord"
+          },
+          "maxItems": 1000000,
+          "title": "Frames",
+          "type": "array"
+        },
+        "sequences": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SequenceSpec"
+          },
+          "title": "Sequences",
+          "type": "array"
+        },
+        "split": {
+          "$ref": "#/$defs/SplitDefinition"
+        }
+      },
+      "required": [
+        "dataset_id",
+        "version",
+        "created_at",
+        "purpose",
+        "class_mapping",
+        "split"
+      ],
+      "title": "DatasetSpec",
+      "type": "object"
+    },
+    "FrameRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "frame_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "title": "Frame Id",
+          "type": "string"
+        },
+        "source_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "sequence_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sequence Id"
+        },
+        "frame_index": {
+          "minimum": 0,
+          "title": "Frame Index",
+          "type": "integer"
+        },
+        "timestamp": {
+          "minimum": 0,
+          "title": "Timestamp",
+          "type": "number"
+        },
+        "image": {
+          "$ref": "#/$defs/Asset"
+        },
+        "annotation": {
+          "$ref": "#/$defs/Asset"
+        }
+      },
+      "required": [
+        "frame_id",
+        "source_id",
+        "frame_index",
+        "timestamp",
+        "image",
+        "annotation"
+      ],
+      "title": "FrameRecord",
+      "type": "object"
+    },
+    "Layer": {
+      "enum": [
+        "detection",
+        "tracking",
+        "traffic_analytics",
+        "pedestrian",
+        "calibration"
+      ],
+      "title": "Layer",
+      "type": "string"
+    },
+    "ObjectKind": {
+      "enum": [
+        "car",
+        "bus",
+        "truck",
+        "motorcycle",
+        "bicycle",
+        "pedestrian",
+        "emergency_vehicle",
+        "unknown"
+      ],
+      "title": "ObjectKind",
+      "type": "string"
+    },
+    "SequenceSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "sequence_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "title": "Sequence Id",
+          "type": "string"
+        },
+        "source_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "start_frame": {
+          "minimum": 0,
+          "title": "Start Frame",
+          "type": "integer"
+        },
+        "end_frame": {
+          "minimum": 0,
+          "title": "End Frame",
+          "type": "integer"
+        },
+        "stride": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Stride",
+          "type": "integer"
+        },
+        "layers": {
+          "items": {
+            "$ref": "#/$defs/Layer"
+          },
+          "minItems": 1,
+          "title": "Layers",
+          "type": "array"
+        },
+        "score_from_seconds": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Score From Seconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "sequence_id",
+        "source_id",
+        "start_frame",
+        "end_frame",
+        "layers"
+      ],
+      "title": "SequenceSpec",
+      "type": "object"
+    },
+    "SourceVideo": {
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "recording_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "title": "Recording Id",
+          "type": "string"
+        },
+        "camera_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "title": "Camera Id",
+          "type": "string"
+        },
+        "intersection_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "title": "Intersection Id",
+          "type": "string"
+        },
+        "video": {
+          "$ref": "#/$defs/Asset"
+        },
+        "captured_at": {
+          "format": "date-time",
+          "title": "Captured At",
+          "type": "string"
+        },
+        "duration_seconds": {
+          "exclusiveMinimum": 0,
+          "maximum": 604800,
+          "title": "Duration Seconds",
+          "type": "number"
+        },
+        "fps": {
+          "exclusiveMinimum": 0,
+          "maximum": 240,
+          "title": "Fps",
+          "type": "number"
+        },
+        "width": {
+          "exclusiveMinimum": 0,
+          "maximum": 16384,
+          "title": "Width",
+          "type": "integer"
+        },
+        "height": {
+          "exclusiveMinimum": 0,
+          "maximum": 16384,
+          "title": "Height",
+          "type": "integer"
+        },
+        "conditions": {
+          "$ref": "#/$defs/Conditions"
+        },
+        "provenance": {
+          "minLength": 1,
+          "title": "Provenance",
+          "type": "string"
+        },
+        "usage": {
+          "enum": [
+            "field",
+            "demo",
+            "synthetic_fixture"
+          ],
+          "title": "Usage",
+          "type": "string"
+        },
+        "pretrained_exposure": {
+          "enum": [
+            "unknown",
+            "known_overlap",
+            "audited_no_known_overlap"
+          ],
+          "title": "Pretrained Exposure",
+          "type": "string"
+        },
+        "geometry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Asset"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "alignment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Asset"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "source_id",
+        "recording_id",
+        "camera_id",
+        "intersection_id",
+        "video",
+        "captured_at",
+        "duration_seconds",
+        "fps",
+        "width",
+        "height",
+        "conditions",
+        "provenance",
+        "usage",
+        "pretrained_exposure"
+      ],
+      "title": "SourceVideo",
+      "type": "object"
+    },
+    "Split": {
+      "enum": [
+        "TRAIN",
+        "VALIDATION",
+        "TEST",
+        "CHALLENGE"
+      ],
+      "title": "Split",
+      "type": "string"
+    },
+    "SplitDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "seed": {
+          "default": 2026,
+          "title": "Seed",
+          "type": "integer"
+        },
+        "group_by": {
+          "default": [
+            "recording",
+            "camera",
+            "day"
+          ],
+          "items": {
+            "enum": [
+              "recording",
+              "camera",
+              "day"
+            ],
+            "type": "string"
+          },
+          "title": "Group By",
+          "type": "array"
+        },
+        "assignments": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Split"
+          },
+          "title": "Assignments",
+          "type": "object"
+        },
+        "independence_exceptions": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Independence Exceptions"
+        }
+      },
+      "title": "SplitDefinition",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": "rohai-dataset-release-1",
+      "default": "rohai-dataset-release-1",
+      "title": "Format",
+      "type": "string"
+    },
+    "dataset": {
+      "$ref": "#/$defs/DatasetSpec"
+    },
+    "files": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "object"
+    },
+    "statistics": {
+      "additionalProperties": true,
+      "title": "Statistics",
+      "type": "object"
+    },
+    "manifest_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Manifest Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "dataset",
+    "files",
+    "statistics",
+    "manifest_sha256"
+  ],
+  "title": "ReleaseManifest",
+  "type": "object"
+}
