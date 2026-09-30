@@ -66,10 +66,14 @@ the baseline command in force and records a policy error.
 ## Recovery
 
 Recovery states are `HEALTHY`, `DEGRADED`, `FAULT`, `SAFE`, `RECOVERING`, and
-`READY_FOR_OPERATOR_CONFIRMATION`. Recovery checks source connection, calibration,
-freshness, analytics, controller, and hardware. A reconnect alone cannot move the
-state machine to healthy or enable a learned policy. All checks must pass, then an
-authorized operator must confirm. Confirmation resets policy mode to `DISABLED`.
+`READY_FOR_OPERATOR_CONFIRMATION`. `DEGRADED` is entered automatically while the
+controller is still running but vision or analytics health is impaired, or any
+direction's evidence is unusable; it is reported with a machine-readable reason and
+clears when the impairment does. It never unlatches `FAULT`/`SAFE` and never enables a
+policy. Recovery from `SAFE` checks source connection, calibration, freshness,
+analytics, controller, and hardware. A reconnect alone cannot move the state machine to
+healthy or enable a learned policy. All checks must pass, then an authorized operator
+must confirm. Confirmation resets policy mode to `DISABLED`.
 
 The current vision source/runtime is terminal after source failure; these endpoints
 provide explicit qualification and confirmation, not automatic camera restart. A new

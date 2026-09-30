@@ -34,6 +34,33 @@ def test_recovery_requires_all_checks_and_operator_confirmation() -> None:
     assert str(recovery.state) == RecoveryState.HEALTHY.value
 
 
+def test_degraded_is_operator_visible_and_clears_without_latching_fault() -> None:
+    recovery = RecoveryStateMachine()
+    recovery.degrade("observation_degraded")
+    assert recovery.state == RecoveryState.DEGRADED
+    assert recovery.reason == "observation_degraded"
+    # A second, different degradation replaces the reason but stays in DEGRADED.
+    recovery.degrade("analytics_degraded")
+    assert recovery.reason == "analytics_degraded"
+    recovery.restore()
+    assert recovery.state == RecoveryState.HEALTHY
+    assert recovery.reason is None
+
+
+def test_degradation_cannot_mask_a_latched_fault_or_safe_state() -> None:
+    recovery = RecoveryStateMachine()
+    recovery.fault("vision_stale")
+    assert recovery.state == RecoveryState.FAULT
+    recovery.mark_safe()
+    recovery.degrade("observation_degraded")
+    recovery.restore()
+    assert recovery.state == RecoveryState.SAFE
+    assert recovery.reason == "vision_stale"
+    # Leaving SAFE still requires the explicit recovery path and operator confirmation.
+    with pytest.raises(RuntimeError):
+        recovery.confirm_operator()
+
+
 def test_decision_journal_retains_baseline_proposal_safety_and_future_outcome() -> None:
     journal = DecisionJournal(capacity=1)
     journal.append(

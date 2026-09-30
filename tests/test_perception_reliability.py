@@ -532,6 +532,7 @@ def test_live_runtime_black_frame_latches_all_red(geometry: IntersectionGeometry
 
     from smart_traffic_backend.config import Settings
     from smart_traffic_backend.hardware import MockHardwareController
+    from smart_traffic_backend.safety_architecture import RecoveryState
     from smart_traffic_backend.vision_runtime import VisionRuntime
     from traffic_vision.detector import CalibrationDetector
 
@@ -568,15 +569,20 @@ def test_live_runtime_black_frame_latches_all_red(geometry: IntersectionGeometry
         runtime = VisionRuntime(settings, hardware, pipeline)
         await runtime.start()
         saw_green = False
+        saw_degraded = False
         try:
             assert runtime.task is not None
             async with asyncio.timeout(10):
                 while not runtime.task.done():
                     saw_green |= hardware.last_signal.stage == SignalStage.GREEN
+                    saw_degraded |= runtime.recovery.state == RecoveryState.DEGRADED
                     if pipeline.latest_analysis is not None:
                         source.analysis_ready.set()
                     await asyncio.sleep(0.02)
             assert not saw_green  # Legacy geometry cannot arm metric control.
+            # Unusable evidence must be reported as DEGRADED, never as silently healthy.
+            assert saw_degraded
+            assert runtime.safety_status().recovery_reason is not None
             assert runtime.engine.safety.faulted
             assert hardware.last_signal.stage == SignalStage.ALL_RED
             assert not runtime.control_ready

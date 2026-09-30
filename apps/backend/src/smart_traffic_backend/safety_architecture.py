@@ -72,26 +72,30 @@ class HardwareStateStages(Model):
 def capture_hardware_state(
     hardware: object, requested: SignalState, approved: SignalState, error: str | None = None
 ) -> HardwareStateStages:
+    """Record the five delivery stages as separate facts.
+
+    An adapter without a delivery record (for example ``MockHardwareController``) has no
+    correlated ACK and no readback, so only the requested/approved/sent stages are known.
+    A send that raised leaves the sent stage unknown instead of assuming it landed, and a
+    successful API call is never recorded as physical lamp evidence.
+    """
     delivery = getattr(hardware, "delivery", None)
     command = getattr(delivery, "command_sent", None)
+    if command is not None:
+        sent = approved if command.kind == "ENTER_SAFE" else command.requested_state
+    else:
+        sent = approved if error is None else None
+    captured_at = time()
     return HardwareStateStages(
         requested=requested,
         safety_approved=approved,
-        command_sent=(
-            approved
-            if command is not None and command.kind == "ENTER_SAFE"
-            else command.requested_state
-            if command is not None
-            else approved
-            if error is None
-            else None
-        ),
+        command_sent=sent,
         hardware_acknowledged=getattr(delivery, "acknowledged_state", None),
         physically_confirmed=getattr(delivery, "physically_confirmed", None),
         command_id=getattr(command, "command_id", None),
         sequence=getattr(command, "sequence", None),
-        requested_at=time(),
-        approved_at=time(),
+        requested_at=captured_at,
+        approved_at=captured_at,
         sent_at=getattr(command, "issued_at", None),
         error=error or getattr(delivery, "error", None),
     )
@@ -175,6 +179,12 @@ class RecoveryStateMachine:
     def degrade(self, reason: str) -> None:
         if self.state in (RecoveryState.HEALTHY, RecoveryState.DEGRADED):
             self.state, self.reason = RecoveryState.DEGRADED, reason
+
+    def restore(self) -> None:
+        """Clear a transient degradation. This never unlatches FAULT/SAFE and never
+        re-arms a learned policy; the operator-visible reason is dropped with it."""
+        if self.state == RecoveryState.DEGRADED:
+            self.state, self.reason = RecoveryState.HEALTHY, None
 
     def fault(self, reason: str) -> None:
         if self.state != RecoveryState.SAFE:

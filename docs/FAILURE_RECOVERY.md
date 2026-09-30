@@ -20,6 +20,15 @@ must handle cases where host delivery is unavailable.
 `HEALTHY -> DEGRADED -> FAULT -> SAFE -> RECOVERING ->
 READY_FOR_OPERATOR_CONFIRMATION -> HEALTHY`
 
+`DEGRADED` is entered by the control loop whenever vision health, analytics health, or
+any direction's evidence is unusable while the controller itself is still running and
+safe. It carries a machine-readable reason (`vision_degraded`, `analytics_degraded`,
+`observation_degraded`) on `GET /api/v1/safety/status`, so a reduced-capability
+intersection is never reported as `HEALTHY`. Clearing a transient degradation returns to
+`HEALTHY` and drops the reason. `DEGRADED` never unlatches `FAULT`/`SAFE` and never
+enables a learned policy; degradation changes what the operator is told, not what the
+controller is allowed to do.
+
 Not every state transition is automatic. Only an explicit recovery request can leave
 `SAFE`; failed qualification returns to `SAFE`. The checks are:
 

@@ -12,7 +12,12 @@ from traffic_core.models import Decision, Lamp, Model, Phase, SignalStage, Signa
 from traffic_core.observed_controller import ObservedTrafficController
 from traffic_core.ports import HardwareController
 from traffic_vision.geometry import load_geometry
-from traffic_vision.models import PipelineStatus, TrackSnapshot, VisionTrafficState
+from traffic_vision.models import (
+    AnalysisSnapshot,
+    PipelineStatus,
+    TrackSnapshot,
+    VisionTrafficState,
+)
 
 from smart_traffic_backend.config import Settings
 from smart_traffic_backend.safety_architecture import (
@@ -246,6 +251,10 @@ class VisionRuntime:
     async def start(self) -> None:
         await self._apply(self._signal_state)
         self.pipeline.start()
+        # The control clock must be stamped when the loop starts. Left at 0.0 the
+        # first tick measured against process uptime and looked infinitely stale,
+        # so control declared a startup timeout before perception could publish.
+        self._started = time.monotonic()
         self.task = asyncio.create_task(self._run(), name="vision-controller")
 
     async def _apply(self, signals: SignalState, requested: SignalState | None = None) -> None:
@@ -282,6 +291,23 @@ class VisionRuntime:
                 "physical_production_ready": False,
             }
         )
+
+    def degradation_reason(self, observation: AnalysisSnapshot | None) -> str | None:
+        """Why the controller is degraded while still safe.
+
+        Returns ``None`` only when vision health, analytics health and every direction's
+        evidence are all usable. Degradation never latches FAULT and never enables a
+        learned policy; it only makes the reduced-capability state operator-visible.
+        """
+        if self.health.vision.status != "healthy":
+            return "vision_degraded"
+        if self.health.analytics.status != "healthy":
+            return "analytics_degraded"
+        if observation is None or any(
+            not metric.observation.reliable for metric in observation.traffic.directions.values()
+        ):
+            return "observation_degraded"
+        return None
 
     def recovery_checks(self) -> RecoveryChecks:
         status = self.pipeline.status()
@@ -373,6 +399,11 @@ class VisionRuntime:
                     break
                 measurement = self.pipeline.observation()
                 assert measurement is not None
+                degradation = self.degradation_reason(measurement)
+                if degradation is None:
+                    self.recovery.restore()
+                else:
+                    self.recovery.degrade(degradation)
                 core_state = self.pipeline.analyzer.to_core_state(measurement)
                 self._record_policy_outcome(core_state)
                 self.engine.advance(core_state, now)

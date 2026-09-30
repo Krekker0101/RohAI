@@ -173,12 +173,16 @@ sequenceDiagram
 uv run --locked --extra vision --extra control-training ruff check .
 uv run --locked --extra vision --extra control-training ruff format --check .
 uv run --locked --extra vision --extra control-training mypy
-uv run --locked --extra vision --extra control-training pytest
+uv run --locked --extra vision --extra control-training pytest --basetemp=.pytest-tmp
 # Все проверки одной командой в PowerShell:
 ./scripts/check.ps1
 # Если локальная политика блокирует .ps1, только для отдельного процесса:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1
 ```
+
+`--basetemp=.pytest-tmp` держит временные каталоги внутри репозитория: на этой
+Windows-машине общий `%TEMP%\pytest-of-<user>` может оказаться недоступен, и тогда
+часть тестов падает с `PermissionError` ещё до запуска тестового кода.
 
 Проверяются startup и clearance, пешеходный minimum, emergency TTL, случайные
 запросы конфликтующих фаз, fault latch, детерминированность, сохранение числа
@@ -187,10 +191,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1
 Benchmark первого этапа seed 42 / 600 s показал **30.05%** снижения суммарного ожидания.
 Vision tests дополнительно проверяют polygon ROI, назначения, queue/wait, lifecycle,
 дубли, перегрузку, видеодекодер, EOF, калибровку и ошибки модели.
-Backend/Vision набор сейчас содержит **46 pytest-тестов**; ранее strict mypy и Ruff также использовались в verification. Настоящий YOLO26 + ByteTrack обработал
-два полных ролика — **1024 кадра**. Подробности и ограничения —
+Backend/Vision набор сейчас содержит **311 pytest-тестов**; strict mypy и Ruff входят
+в тот же прогон проверок. Настоящий YOLO26 + ByteTrack обработал два полных ролика —
+**1024 кадра**. Подробности и ограничения —
 [docs/VISION_VERIFICATION.md](docs/VISION_VERIFICATION.md).
 Окружение, подробные KPI и ограничения проверки — [docs/verification.md](docs/verification.md).
+
+Архитектура безопасности и её границы: [SAFETY_ARCHITECTURE.md](docs/SAFETY_ARCHITECTURE.md),
+[HARDWARE_PROTOCOL.md](docs/HARDWARE_PROTOCOL.md),
+[FAILURE_RECOVERY.md](docs/FAILURE_RECOVERY.md), [SHADOW_MODE.md](docs/SHADOW_MODE.md),
+[FAULT_INJECTION_REPORT.md](docs/FAULT_INJECTION_REPORT.md).
+Физический релиз запрещён, пока нет device feedback и независимого watchdog — см.
+«Release gates» в SAFETY_ARCHITECTURE.
 
 Docker (опционально): `docker build -f docker/Dockerfile -t smart-traffic-ai .`,
 затем `docker run --rm -p 127.0.0.1:8000:8000 smart-traffic-ai`.
