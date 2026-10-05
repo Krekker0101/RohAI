@@ -37,11 +37,13 @@ Not every state transition is automatic. Only an explicit recovery request can l
 - `freshness`: frame is within configured source freshness.
 - `analytics`: analytics heartbeat is within its stage deadline.
 - `controller`: control task is live and no failure is latched.
-- `hardware`: recent hardware ACK health is good.
+- `hardware`: healthy delivery, ACK within the configured hardware deadline, and
+  independent physical confirmation. Mock/emulator evidence cannot pass this gate.
 
 All six checks must pass before the state becomes
 `READY_FOR_OPERATOR_CONFIRMATION`. An authorized operator confirmation is still
 required. Confirmation never enables a policy; policy mode is reset to `DISABLED`.
+All checks are evaluated again at confirmation, preventing approval of expired evidence.
 The current source worker terminates on disconnect, so reconnect alone is not a
 recovery implementation. A supervised source restart and renewed qualification remain
 future work.

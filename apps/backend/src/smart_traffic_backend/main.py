@@ -73,6 +73,8 @@ def require_operator(
     runtime: RuntimeDep, x_operator_token: Annotated[str | None, Header()] = None
 ) -> None:
     expected = runtime.settings.operator_token
+    if expected is None and runtime.settings.mode != "simulation":
+        raise HTTPException(status_code=503, detail="Operator authentication must be configured")
     if expected is not None and not secrets.compare_digest(
         (x_operator_token or "").encode(), expected.get_secret_value().encode()
     ):

@@ -44,6 +44,11 @@ stale/future/replayed samples and mismatched command identity. Only independent 
 on a physical device can set `physically_confirmed`. Emulator-origin feedback is
 recorded separately.
 
+Feedback refresh failure clears both physical and emulated current confirmation and
+marks delivery FAULT. ENTER_SAFE feedback must identify the outstanding command and
+sequence and report a latched watchdog. A null safe-mode ID during clearance means
+the transition is still underway, not that the final safe program is confirmed.
+
 ## Watchdog contract
 
 Device firmware must enforce the accepted lease without relying on host timers,
@@ -53,6 +58,9 @@ clearance transition. The fault is latched until explicit rearm. The emulator's
 separate OS process demonstrates lease expiry and latch behavior but is not a substitute
 for a hardware watchdog, MCU firmware, independent power path, or electrical output
 interlock.
+
+The device independently enforces maximum continuous green. Renewing command leases
+cannot bypass this limit.
 
 ## Conformance tests
 

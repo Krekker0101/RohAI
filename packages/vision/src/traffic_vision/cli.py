@@ -17,6 +17,8 @@ from traffic_vision.evaluation.vision import finish_report
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(prog="rohai", description=__doc__)
     commands = result.add_subparsers(dest="command", required=True)
+    maket = commands.add_parser("maket")
+    maket.add_argument("arguments", nargs=argparse.REMAINDER)
     from traffic_vision.training.cli import add_commands
 
     add_commands(commands)
@@ -89,6 +91,10 @@ def _protect_output(output: Path | None, release_path: Path) -> None:
 
 
 def execute(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    if args.command == "maket":
+        from smart_traffic_backend.maket.app import main as maket_main
+
+        return {"mode": "PHYSICAL_MAKET"}, maket_main(args.arguments)
     if args.command in ("train", "model", "registry"):
         from traffic_vision.training.cli import execute as lifecycle_execute
 
@@ -188,6 +194,10 @@ def execute(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
+    if args.command == "maket":
+        from smart_traffic_backend.maket.app import main as maket_main
+
+        return maket_main(args.arguments)
     try:
         output = getattr(args, "output", None)
         if output is not None and output.exists():

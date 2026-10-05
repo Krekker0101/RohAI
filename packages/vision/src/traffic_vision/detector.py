@@ -64,6 +64,8 @@ class YOLODetector:
                 f"Model missing: {self.settings.model_path}; run scripts/fetch_vision_demo.py"
             )
         self.manifest = ModelManifest.load(self.settings.manifest_path)
+        if self.settings.deployment_domain != self.manifest.deployment_domain:
+            raise ValueError("Model deployment domain does not match runtime")
         # Verify integrity before deserializing any trusted checkpoint.
         self.manifest.validate_model(
             self.manifest.class_id_mapping, self.settings.model_path, self.settings.image_size

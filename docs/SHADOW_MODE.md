@@ -21,6 +21,12 @@ may be outstanding; later ticks keep baseline control and record that the policy
 busy. A task timeout, exception, invalid phase, non-finite green duration, or schema
 mismatch is recorded as `policy_error`. The candidate type constrains phase and requires
 a finite positive duration. No failed candidate is used as a safety action.
+Already-constructed candidate instances are revalidated, including instances created
+through validation-bypassing model APIs. Proposers run in one off-loop worker thread.
+A timed-out running proposal keeps that worker slot occupied; subsequent ticks journal
+busy fallback rather than creating additional workers. Threads cannot terminate arbitrary
+native/GIL-held work. Untrusted execution requires process isolation before physical
+commissioning; the device watchdog remains necessary.
 
 ## Audit fields
 

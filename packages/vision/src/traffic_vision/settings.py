@@ -6,6 +6,7 @@ from traffic_core.models import Model
 
 
 class AnalyticsSettings(Model):
+    coordinate_domain: Literal["road", "maket_relative"] = "road"
     slow_speed_px_per_second: float = Field(default=12, gt=0)
     motion_window_seconds: float = Field(default=0.5, gt=0, le=5)
     stop_confirmation_seconds: float = Field(default=0.2, gt=0)
@@ -55,7 +56,25 @@ class PerceptionHealthSettings(Model):
 
 
 class VisionSettings(Model):
-    source: Literal["webcam", "file", "rtsp", "synthetic"] = "synthetic"
+    deployment_domain: Literal["UNSPECIFIED", "PHYSICAL_MAKET", "REAL_ROAD"] = "UNSPECIFIED"
+    source: Literal["builtin_camera", "usb_camera", "webcam", "file", "rtsp", "synthetic"] = (
+        "synthetic"
+    )
+    camera_backend: Literal["AUTO", "DSHOW", "MSMF", "ANY"] = "AUTO"
+    camera_width: int = Field(default=1280, ge=160, le=3840)
+    camera_height: int = Field(default=720, ge=120, le=2160)
+    camera_rotation: Literal[0, 90, 180, 270] = 0
+    camera_mirror: bool = False
+    camera_crop: tuple[float, float, float, float] = (0, 0, 1, 1)
+    inference_hz: float | None = Field(default=None, gt=0, le=120)
+
+    @model_validator(mode="after")
+    def camera_transform(self) -> "VisionSettings":
+        x, y, w, h = self.camera_crop
+        if not (0 <= x < 1 and 0 <= y < 1 and w > 0 and h > 0 and x + w <= 1 and y + h <= 1):
+            raise ValueError("Camera crop must be a normalized rectangle inside the frame")
+        return self
+
     source_id: str = Field(default="demo", pattern=r"^[A-Za-z0-9_-]{1,64}$")
     uri: str = ""
     webcam_index: int = Field(default=0, ge=0)

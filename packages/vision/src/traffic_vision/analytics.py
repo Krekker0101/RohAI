@@ -353,7 +353,10 @@ class TrafficAnalyzer:
         core = self._core_approach(lane, queued, rate)
         evidence = self.evidence.get(lane.value, ObservationEvidence())
         reasons = list(evidence.failure_reasons)
-        if evidence.source_camera_ids != ("simulator",):
+        if (
+            evidence.source_camera_ids != ("simulator",)
+            and self.settings.coordinate_domain != "maket_relative"
+        ):
             reasons.extend(self._estimation.reasons)
             if lane.value not in self._estimation.metrics:
                 reasons.append("road_approach_not_covered")
@@ -430,6 +433,7 @@ class TrafficAnalyzer:
                 "observation_status": status,
                 "calibration_status": evidence.calibration_status
                 if evidence.source_camera_ids == ("simulator",)
+                or self.settings.coordinate_domain == "maket_relative"
                 else self._estimation.calibration_status.lower(),
                 "failure_reasons": tuple(dict.fromkeys(reasons)),
                 "tracking_quality": tq,

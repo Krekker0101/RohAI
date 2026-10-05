@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 from collections import deque
+from concurrent.futures import Future, ThreadPoolExecutor
 from enum import StrEnum
 from threading import Lock
 from time import time
 from typing import Literal, Protocol
 
-from pydantic import Field
+from pydantic import ConfigDict, Field
 from traffic_core.hardware_protocol import HardwareFeedback
 from traffic_core.models import Model, Phase, SignalState, TrafficState
 
@@ -19,12 +21,49 @@ class PolicyMode(StrEnum):
 
 
 class PolicyCandidate(Model):
+    model_config = ConfigDict(
+        frozen=True, extra="forbid", allow_inf_nan=False, revalidate_instances="always"
+    )
     phase: Phase
     green_seconds: float = Field(gt=0)
 
 
 class LearnedPolicyProposer(Protocol):
     async def propose(self, observation: TrafficState) -> PolicyCandidate: ...
+
+
+class PolicyWorker:
+    """One off-loop evaluation; timed-out running jobs continue occupying the slot.
+
+    Threads cannot kill arbitrary native/GIL-held code. Physical deployment still
+    requires process isolation and the independent device watchdog.
+    """
+
+    def __init__(self) -> None:
+        self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="shadow-policy")
+        self.future: Future[PolicyCandidate] | None = None
+
+    @property
+    def busy(self) -> bool:
+        return self.future is not None and not self.future.done()
+
+    async def propose(
+        self, proposer: LearnedPolicyProposer, observation: TrafficState, timeout_s: float
+    ) -> PolicyCandidate:
+        if self.busy:
+            raise RuntimeError("Previous policy evaluation still running")
+
+        def run() -> PolicyCandidate:
+            return asyncio.run(proposer.propose(observation))
+
+        self.future = self.executor.submit(run)
+        result = asyncio.wrap_future(self.future)
+        result.add_done_callback(lambda f: f.exception() if not f.cancelled() else None)
+        async with asyncio.timeout(timeout_s):
+            return await asyncio.shield(result)
+
+    def close(self) -> None:
+        self.executor.shutdown(wait=False, cancel_futures=True)
 
 
 class RecoveryState(StrEnum):
@@ -82,7 +121,8 @@ def capture_hardware_state(
     delivery = getattr(hardware, "delivery", None)
     command = getattr(delivery, "command_sent", None)
     if command is not None:
-        sent = approved if command.kind == "ENTER_SAFE" else command.requested_state
+        # ENTER_SAFE names a program; it does not send a lamp state or prove clearance.
+        sent = command.requested_state
     else:
         sent = approved if error is None else None
     captured_at = time()

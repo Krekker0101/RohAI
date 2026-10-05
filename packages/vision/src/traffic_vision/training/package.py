@@ -35,9 +35,9 @@ class ModelPackage(Model):
     training_manifest_sha256: Digest
     class_mapping: dict[int, ObjectKind]
     supported_input: SupportedInput
-    expected_calibration: Literal["validated_metric_road_plane_and_fresh_alignment"] = (
-        "validated_metric_road_plane_and_fresh_alignment"
-    )
+    expected_calibration: Literal[
+        "validated_metric_road_plane_and_fresh_alignment", "validated_maket_geometry_and_alignment"
+    ] = "validated_metric_road_plane_and_fresh_alignment"
     files: dict[str, Digest]
     package_sha256: Digest
 
@@ -102,6 +102,7 @@ def verify_package(root: Path, *, expected_hash: str | None = None) -> ModelPack
         or config.dataset_hash != package.dataset_hash
         or config.dataset_version != package.dataset_version
         or config.image_size != package.supported_input.image_size
+        or adapter.deployment_domain != config.deployment_domain
         or training["artifacts"].get("ultralytics/weights/best.pt") != adapter.weights_hash
     ):
         raise ValueError("Package training provenance mismatch")
@@ -159,6 +160,7 @@ def seal_package(run: Path, destination: Path) -> ModelPackage:
             },
         )
         adapter = ModelManifest(
+            deployment_domain=config.deployment_domain,
             model_id="rohai-" + training["run_id"],
             model_version="1",
             architecture="YOLO26n",
@@ -171,10 +173,15 @@ def seal_package(run: Path, destination: Path) -> ModelPackage:
             training_commit=training["git_commit"],
             created_at=datetime.now(UTC),
             supported_features=("detect",),
-            calibration_requirements=("validated_metric_road_plane_and_fresh_alignment",),
+            calibration_requirements=(
+                "validated_maket_geometry_and_alignment"
+                if config.deployment_domain == "PHYSICAL_MAKET"
+                else "validated_metric_road_plane_and_fresh_alignment",
+            ),
         )
         write_new_json(staging / "model.json", adapter.model_dump(mode="json"))
         values: dict[str, Any] = {
+            "expected_calibration": adapter.calibration_requirements[0],
             "created_at": datetime.now(UTC),
             "dataset_version": config.dataset_version,
             "dataset_hash": config.dataset_hash,

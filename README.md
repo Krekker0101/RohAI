@@ -285,3 +285,26 @@ Production default не переключается на learned policy авто�
 .venv\Scripts\python.exe -m traffic_vision.demo --input recordings/test.mp4 --frames 300 --show
 Результат: окно с распознаванием и recordings/vision-demo.mp4.
 Для твоей камеры нужна своя геометрия/калибровка: без неё можно проверить обнаружение машин, но не достоверность очередей и метров. Видео не проверяет эффективность управления светофором.
+
+
+## Physical Maket Demo
+
+Camera ? RohAI Vision ? Traffic State Estimation ? AI Controller ? Safety ? ESP32 ? Physical Traffic Lights.
+
+Built-in laptop / USB / RTSP live input. Default CAMERA_ONLY runs vision, calibration,
+tracking, analytics and shadow recommendations without ESP32 or physical commands.
+Simple console: `http://127.0.0.1:8001/maket`; local authentication and sole-camera
+selection are automatic. Calibrate graphically and press Start for SHADOW.
+Advanced controls remain at `/maket/engineer`. Physical output requires an explicit
+mode change and hardware preflight. See [Simple Mode](docs/MAKET_SIMPLE_MODE.md)
+and [UX evidence](docs/MAKET_UX_AUDIT.md).
+
+```powershell
+uv sync --extra vision --extra maket --extra control-training
+.venv/Scripts/python.exe -m traffic_vision.cli maket ports
+# Default COCO baseline + CAMERA_ONLY; no manual token needed for local CLI sessions.
+.venv/Scripts/python.exe -m traffic_vision.cli maket validate
+.venv/Scripts/python.exe -m traffic_vision.cli maket start --open
+```
+
+[Setup and wiring](docs/MAKET_SETUP_GUIDE.md), [ESP32 firmware/protocol](docs/ESP32_TRAFFIC_LIGHTS.md), [readiness evidence](docs/PHYSICAL_MAKET_READINESS_REPORT.md). The verified toy-model release and physical camera/ESP32 acceptance measurements are currently absent. Software implementation is not a completed physical demo; REAL_ROAD activation remains blocked.

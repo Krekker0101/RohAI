@@ -113,9 +113,16 @@ class VisionPipeline:
         self._threads: list[threading.Thread] = []
         self._latest: PublishedFrame | None = None
         self._latest_analysis: AnalyzedFrame | None = None
+        self._latest_capture: VideoFrame | None = None
         self._state = "starting"
         self._error: str | None = None
         self._counts = [0, 0, 0, 0]
+        self._stage_times: dict[str, deque[float]] = {
+            key: deque(maxlen=120) for key in ("capture", "inference", "analytics")
+        }
+        self._stage_latency: dict[str, deque[float]] = {
+            key: deque(maxlen=300) for key in ("inference", "analytics", "camera_to_analytics")
+        }
         self._stale_drops = 0
         self._publication_times: deque[float] = deque(maxlen=30)
         self._latency_ms = 0.0
@@ -128,6 +135,11 @@ class VisionPipeline:
     def latest(self) -> PublishedFrame | None:
         with self._lock:
             return self._latest
+
+    @property
+    def latest_capture(self) -> VideoFrame | None:
+        with self._lock:
+            return self._latest_capture
 
     @property
     def latest_analysis(self) -> AnalyzedFrame | None:
@@ -150,7 +162,9 @@ class VisionPipeline:
                     "inferred": self._counts[1],
                     "analyzed": self._counts[2],
                     "published": self._counts[3],
-                    "dropped_capture": self._capture.dropped + self._stale_drops,
+                    "dropped_capture": self._capture.dropped
+                    + self._stale_drops
+                    + getattr(self.source, "dropped_frames", 0),
                     "dropped_inference": self._inferred.dropped,
                     "dropped_analysis": self._analyzed.dropped,
                     "processing_fps": fps,
@@ -162,6 +176,25 @@ class VisionPipeline:
     def heartbeat_timestamps(self) -> dict[str, float]:
         with self._lock:
             return dict(self._heartbeat_timestamps)
+
+    def performance(self) -> dict[str, object]:
+        import numpy as np
+
+        with self._lock:
+            now = time.monotonic()
+            rates = {}
+            for key, stamps in self._stage_times.items():
+                recent = [stamp for stamp in stamps if now - stamp <= 5]
+                rates[key + "_fps"] = (
+                    (len(recent) - 1) / (recent[-1] - recent[0]) if len(recent) > 1 else 0.0
+                )
+            latency = {
+                key: {"p50": float(np.median(values)), "p95": float(np.percentile(values, 95))}
+                if values
+                else None
+                for key, values in self._stage_latency.items()
+            }
+        return {"rates": rates, "latency_ms": latency}
 
     def observation(self, now: float | None = None) -> AnalysisSnapshot | None:
         """Refresh evidence even when workers no longer produce frames."""
@@ -270,7 +303,10 @@ class VisionPipeline:
 
     def _capture_loop(self) -> None:
         try:
-            while not self._model_ready.wait(0.1):
+            while self.settings.source not in (
+                "builtin_camera",
+                "usb_camera",
+            ) and not self._model_ready.wait(0.1):
                 if self._stop.is_set():
                     return
             if self._stop.is_set():
@@ -291,8 +327,10 @@ class VisionPipeline:
                     break
                 with self._lock:
                     self._counts[0] += 1
+                    self._stage_times["capture"].append(time.monotonic())
                     self._heartbeats["capture"] = time.monotonic()
                     self._heartbeat_timestamps["frame"] = time.time()
+                    self._latest_capture = frame
                 self._capture.put(frame)
         finally:
             self._connected = False
@@ -303,14 +341,26 @@ class VisionPipeline:
         try:
             self.detector.open()
             self._model_ready.set()
+            next_inference = 0.0
             while not self._stop.is_set():
+                if self.settings.inference_hz is not None and self._stop.wait(
+                    max(0, next_inference - time.monotonic())
+                ):
+                    break
                 frame = self._capture.take()
                 if time.monotonic() - frame.captured_at > self.settings.max_frame_age_seconds:
                     with self._lock:
                         self._stale_drops += 1
                     continue
+                stage_started = time.monotonic()
                 detections = self.detector.process(frame)
+                if self.settings.inference_hz is not None:
+                    next_inference = time.monotonic() + 1 / self.settings.inference_hz
                 with self._lock:
+                    self._stage_latency["inference"].append(
+                        (time.monotonic() - stage_started) * 1000
+                    )
+                    self._stage_times["inference"].append(time.monotonic())
                     self._counts[1] += 1
                     self._heartbeats["inference"] = time.monotonic()
                     self._heartbeat_timestamps["inference"] = time.time()
@@ -325,6 +375,7 @@ class VisionPipeline:
                 result = self._inferred.take()
                 frame = result.video
                 height, width = frame.frame.shape[:2]
+                stage_started = time.monotonic()
                 analysis = self.analyzer.process(
                     result.detections,
                     source_id=frame.source_id,
@@ -339,6 +390,13 @@ class VisionPipeline:
                 )
                 analyzed = AnalyzedFrame(frame, analysis, self.analyzer.to_core_state(analysis))
                 with self._lock:
+                    self._stage_latency["analytics"].append(
+                        (time.monotonic() - stage_started) * 1000
+                    )
+                    self._stage_latency["camera_to_analytics"].append(
+                        (time.monotonic() - frame.captured_at) * 1000
+                    )
+                    self._stage_times["analytics"].append(time.monotonic())
                     self._latest_analysis = analyzed
                     self._state = "running"
                     self._counts[2] += 1

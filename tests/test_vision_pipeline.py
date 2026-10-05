@@ -11,6 +11,7 @@ import pytest
 cv2 = pytest.importorskip("cv2", reason="Install the vision extra")
 
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 from smart_traffic_backend.config import Settings
 from smart_traffic_backend.hardware import MockHardwareController
 from smart_traffic_backend.main import create_app
@@ -143,13 +144,14 @@ def test_vision_api_calibration_and_eof_all_red(tmp_path: Path) -> None:
     hardware = MockHardwareController()
     settings = Settings(
         mode="vision",
+        operator_token=SecretStr("test-vision-operator"),
         tick_seconds=0.05,
         vision=VisionSettings(
             synthetic_frames=18, synthetic_fps=15, calibration_directory=tmp_path
         ),
     )
     app = create_app(settings, hardware)
-    with TestClient(app) as client:
+    with TestClient(app, headers={"X-Operator-Token": "test-vision-operator"}) as client:
         wait_until(lambda: client.get("/health/ready").status_code == 200)
         wait_until(lambda: client.get("/api/v1/vision/frame.jpg").status_code == 200)
         assert client.get("/api/v1/vision/frame.jpg").content.startswith(b"\xff\xd8")
@@ -182,12 +184,13 @@ def test_calibration_saves_geometry_and_never_enables_green(tmp_path: Path) -> N
     app = create_app(
         Settings(
             mode="calibration",
+            operator_token=SecretStr("test-vision-operator"),
             tick_seconds=0.05,
             vision=VisionSettings(calibration_directory=tmp_path),
         ),
         hardware,
     )
-    with TestClient(app) as client:
+    with TestClient(app, headers={"X-Operator-Token": "test-vision-operator"}) as client:
         wait_until(lambda: client.get("/health/ready").status_code == 200)
         geometry = load_geometry(Path("configs/cameras/demo.json"))
         response = client.put("/api/v1/vision/geometry/demo", json=geometry.model_dump(mode="json"))

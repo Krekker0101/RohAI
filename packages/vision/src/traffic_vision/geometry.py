@@ -101,6 +101,9 @@ class ApproachGeometry(Model):
     incoming: Polygon
     queue_zone: Polygon
     stop_line: StopLine
+    entry_line: StopLine | None = None
+    exit_line: StopLine | None = None
+    lanes: dict[str, Polygon] = Field(default_factory=dict)
     pedestrian_crossing: Polygon | None = None
     waiting_zone: Polygon | None = None
     crosswalk_zone: Polygon | None = None

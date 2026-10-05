@@ -43,6 +43,11 @@ the site-approved device safety program and latch until explicit local/operator 
 Malformed messages, duplicate commands, and transport heartbeats must not extend a
 lease.
 
+The device also bounds continuous green independently of command renewal. At the
+configured maximum green duration it latches the selected safety program, even when
+fresh authenticated commands continue arriving. A failed feedback refresh clears
+current confirmation and marks delivery FAULT; historical ACK is not current readback.
+
 The actual safe traffic program is identified by `safe_mode_id` and linked to a
 `requirements_reference` supplied by the authority responsible for the intersection.
 RohAI has no default production traffic mode. The emulator implements only the

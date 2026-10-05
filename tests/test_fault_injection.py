@@ -301,7 +301,37 @@ def test_host_rejects_replayed_feedback_sample() -> None:
         assert hardware.delivery.status == "ACKNOWLEDGED"
         with pytest.raises(ValueError, match="Replayed feedback"):
             await hardware.refresh_feedback()
+        assert hardware.delivery.status == "FAULT"
+        assert hardware.delivery.emulated_feedback is None
         assert hardware.delivery.physically_confirmed is None
+
+    asyncio.run(exercise())
+
+
+def test_fresh_commands_cannot_extend_green_past_device_limit() -> None:
+    device, now, utc = device_accepting_green()
+    limit = device.timing.max_green_seconds
+    for sequence, elapsed in enumerate(range(5, int(limit), 5), start=2):
+        assert device.receive(
+            signal_command(device, sequence, utc + elapsed), now + elapsed, utc + elapsed
+        ).accepted
+    assert device.lease_deadline > now + limit
+    device.tick(now + limit)
+    assert device.watchdog_latched
+    assert device.signal.stage == SignalStage.YELLOW
+
+
+def test_safe_request_rejects_uncorrelated_feedback() -> None:
+    async def exercise() -> None:
+        transport = ScriptedTransport()
+        transport.feedback_hook = lambda feedback: authenticate(
+            feedback.model_copy(update={"command_id": "previous-command"}), KEY
+        )
+        hardware = ProtocolHardwareController(transport, requirements(), INSTANCE, KEY)
+        with pytest.raises(ValueError, match="Safe-program feedback"):
+            await hardware.enter_safe()
+        assert hardware.delivery.status == "FAULT"
+        assert hardware.delivery.emulated_feedback is None
 
     asyncio.run(exercise())
 

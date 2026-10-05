@@ -228,16 +228,28 @@ class SyntheticSource(VideoSource):
 
 
 def create_source(settings: VisionSettings) -> VideoSource:
+    if settings.source in ("builtin_camera", "usb_camera"):
+        from traffic_vision.camera import LocalCameraSource
+
+        return LocalCameraSource(settings)
     if settings.source == "file":
-        return VideoFileSource(Path(settings.uri), settings.source_id)
-    if settings.source == "webcam":
-        return WebcamSource(settings.webcam_index, settings.source_id)
-    if settings.source == "rtsp":
-        return RTSPSource(
+        source: VideoSource = VideoFileSource(Path(settings.uri), settings.source_id)
+    elif settings.source == "webcam":
+        source = WebcamSource(settings.webcam_index, settings.source_id)
+    elif settings.source == "rtsp":
+        source = RTSPSource(
             settings.uri,
             settings.source_id,
             settings.capture_timeout_ms,
             settings.reconnect_attempts,
             settings.reconnect_delay_seconds,
         )
-    return SyntheticSource(settings.source_id, settings.synthetic_frames, settings.synthetic_fps)
+    else:
+        source = SyntheticSource(
+            settings.source_id, settings.synthetic_frames, settings.synthetic_fps
+        )
+    if settings.camera_rotation or settings.camera_mirror or settings.camera_crop != (0, 0, 1, 1):
+        from traffic_vision.camera import TransformedSource
+
+        return TransformedSource(source, settings)
+    return source

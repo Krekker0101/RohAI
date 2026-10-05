@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="21" time="1.015" timestamp="2026-10-04T20:01:16.258160+05:00" hostname="DESKTOP-RHAI93E"><testcase classname="tests.test_principal_audit" name="test_camera_diagnostics_under_adversarial_inputs[nothing]" time="0.053" /><testcase classname="tests.test_principal_audit" name="test_camera_diagnostics_under_adversarial_inputs[blocked]" time="0.048" /><testcase classname="tests.test_principal_audit" name="test_camera_diagnostics_under_adversarial_inputs[night]" time="0.039" /><testcase classname="tests.test_principal_audit" name="test_camera_diagnostics_under_adversarial_inputs[frozen]" time="0.039" /><testcase classname="tests.test_principal_audit" name="test_camera_diagnostics_under_adversarial_inputs[low-fps]" time="0.036" /><testcase classname="tests.test_principal_audit" name="test_camera_diagnostics_under_adversarial_inputs[variable-fps]" time="0.041" /><testcase classname="tests.test_principal_audit" name="test_camera_diagnostics_under_adversarial_inputs[out-of-order]" time="0.038"><failure message="pydantic_core._pydantic_core.ValidationError: 1 validation error for ObservationEvidence&#10;measurement_timestamp&#10;  Input should be greater than or equal to 0 [type=greater_than_equal, input_value=-0.1, input_type=float]&#10;    For further information visit https://errors.pydantic.dev/2.13/v/greater_than_equal">condition = 'out-of-order'
+
+    @pytest.mark.parametrize("condition", ["nothing", "blocked", "night", "frozen", "low-fps",
+                                          "variable-fps", "out-of-order", "disconnected", "stale"])
+    def test_camera_diagnostics_under_adversarial_inputs(condition: str) -&gt; None:
+        geometry = load_geometry(Path("configs/cameras/demo.json"))
+        monitor = PerceptionHealthMonitor(PerceptionHealthSettings())
+        rng = np.random.default_rng(81377)
+        image = rng.integers(40, 210, (720, 1280, 3), dtype=np.uint8)
+        monitor.inspect(VideoFrame(image, 0, 0, geometry.source_id, 100), geometry, 100)
+        timestamp, now, connected = 0.1, 100.1, True
+        if condition in ("nothing", "blocked"):
+            image = np.zeros_like(image)
+        elif condition == "night":
+            image = np.full_like(image, 3)
+        elif condition == "frozen":
+            timestamp = monitor.settings.frozen_seconds + 1
+        elif condition in ("low-fps", "variable-fps"):
+            timestamp = 10
+        elif condition == "out-of-order":
+            timestamp = -0.1
+        elif condition == "disconnected":
+            connected = False
+        elif condition == "stale":
+            now = 110
+&gt;       evidence = monitor.inspect(VideoFrame(image, timestamp, 1, geometry.source_id, 100),
+                                   geometry, now, camera_connected=connected)
+
+tests\test_principal_audit.py:48: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = &lt;traffic_vision.health.PerceptionHealthMonitor object at 0x000001C2FFED2030&gt;
+packet = VideoFrame(frame=array([[[194, 154, 190],
+        [122, 115, 151],
+        [172,  84,  62],
+        ...,
+        [197,...]]], shape=(720, 1280, 3), dtype=uint8), timestamp=-0.1, frame_id=1, source_id='demo', captured_at=100, stream_epoch=0)
+geometry = IntersectionGeometry(road=None, camera_calibration=None, calibration_validated_at=None, calibration_valid_for_seconds=...Point(x=0.36, y=0.65))), waiting_zone=None, crosswalk_zone=None, exit_zone=None, meters_per_pixel=None, enabled=True)))
+now = 100.1, inference_alive = True, analytics_alive = True
+camera_connected = True
+wall_time = datetime.datetime(2026, 10, 4, 15, 1, 16, 797378, tzinfo=datetime.timezone.utc)
+
+    def inspect(
+        self,
+        packet: VideoFrame,
+        geometry: IntersectionGeometry,
+        now: float,
+        *,
+        inference_alive: bool = True,
+        analytics_alive: bool = True,
+        camera_connected: bool = True,
+        wall_time: datetime | None = None,
+    ) -&gt; dict[str, ObservationEvidence]:
+        if self.epoch != packet.stream_epoch:
+            self.previous.clear()
+            self.baseline_texture.clear()
+            self.epoch = packet.stream_epoch
+        wall_time = wall_time or datetime.now(UTC)
+        calibration = "missing"
+        if geometry.camera_calibration is not None:
+            from traffic_vision.calibration import CalibrationValidator
+    
+            calibration = CalibrationValidator.validate(
+                geometry.camera_calibration,
+                camera_id=packet.source_id,
+                width=packet.frame.shape[1],
+                height=packet.frame.shape[0],
+                now=wall_time,
+            ).status.value.lower()
+        elif geometry.calibration_validated_at is not None:
+            stamp = geometry.calibration_validated_at
+            if stamp.tzinfo is None:
+                calibration = "invalid"
+            else:
+                age = (wall_time - stamp).total_seconds()
+                calibration = (
+                    "valid" if 0 &lt;= age &lt;= geometry.calibration_valid_for_seconds else "stale"
+                )
+        age_ms = max(0, now - packet.captured_at) * 1000
+        gray = np.asarray(cv2.cvtColor(packet.frame, cv2.COLOR_BGR2GRAY), dtype=np.uint8)
+        gray = np.asarray(cv2.resize(gray, (320, 180)), dtype=np.uint8)
+        result = {}
+        for approach in geometry.approaches:
+            key = approach.direction.value
+            # All calibrated task ROIs matter, including pedestrian waiting/crossing areas.
+            zones = [approach.incoming, approach.queue_zone]
+            zones.extend(
+                z
+                for z in (
+                    approach.waiting_zone,
+                    approach.crosswalk_zone,
+                    approach.exit_zone,
+                    approach.pedestrian_crossing,
+                )
+                if z is not None
+            )
+            checks: dict[str, bool | None] = {
+                "camera_connected": camera_connected,
+                "frame_fresh": age_ms &lt;= self.settings.stale_seconds * 1000,
+                "inference_alive": inference_alive,
+                "analytics_alive": analytics_alive,
+                "calibration_available": calibration != "missing",
+                "calibration_fresh": calibration == "valid",
+            }
+            reasons: list[str] = []
+            for index, zone in enumerate(zones):
+                zone_checks = self._image_checks(gray, zone, f"{key}:{index}", packet.timestamp)
+                for name, value in zone_checks.items():
+                    checks[name] = bool(checks.get(name, True)) and value
+            if not approach.enabled:
+                reasons.append("direction_not_covered")
+            if calibration != "valid":
+                reasons.append(f"calibration_{calibration}")
+            if not all((approach.waiting_zone, approach.crosswalk_zone, approach.exit_zone)):
+                reasons.append("pedestrian_calibration_incomplete")
+            reasons.extend(name for name, value in checks.items() if value is False)
+            status = ObservationStatus.OBSERVED
+            if reasons:
+                status = ObservationStatus.DEGRADED
+            if not approach.enabled:
+                status = ObservationStatus.UNOBSERVED
+            if not checks["frame_fresh"]:
+                status = ObservationStatus.STALE
+            if not camera_connected or not inference_alive or not analytics_alive:
+                status = ObservationStatus.FAILED
+            confidence = 1.0 if status == ObservationStatus.OBSERVED else 0.0
+&gt;           result[key] = ObservationEvidence(
+                observation_status=status,
+                measurement_timestamp=packet.timestamp,
+                measurement_age_ms=age_ms,
+                source_camera_ids=(packet.source_id,),
+                camera_health=checks,
+                visibility_score=confidence,
+                detection_coverage=confidence,
+                tracking_quality=1,
+                calibration_status=calibration,
+                measurement_confidence=confidence,
+                failure_reasons=tuple(dict.fromkeys(reasons)),
+                uncertainty=Uncertainty(observation_confidence=confidence),
+            )
+E           pydantic_core._pydantic_core.ValidationError: 1 validation error for ObservationEvidence
+E           measurement_timestamp
+E             Input should be greater than or equal to 0 [type=greater_than_equal, input_value=-0.1, input_type=float]
+E               For further information visit https://errors.pydantic.dev/2.13/v/greater_than_equal
+
+packages\vision\src\traffic_vision\health.py:105: ValidationError</failure></testcase><testcase classname="tests.test_principal_audit" name="test_camera_diagnostics_under_adversarial_inputs[disconnected]" time="0.035" /><testcase classname="tests.test_principal_audit" name="test_camera_diagnostics_under_adversarial_inputs[stale]" time="0.042" /><testcase classname="tests.test_principal_audit" name="test_analyzer_rejects_reversed_time_and_wrong_camera" time="0.002" /><testcase classname="tests.test_principal_audit" name="test_manifest_rejects_class_mapping_mismatch" time="0.001" /><testcase classname="tests.test_principal_audit" name="test_rl_rejects_invalid_actions[nan]" time="0.002" /><testcase classname="tests.test_principal_audit" name="test_rl_rejects_invalid_actions[inf]" time="0.004" /><testcase classname="tests.test_principal_audit" name="test_rl_rejects_invalid_actions[-1]" time="0.003" /><testcase classname="tests.test_principal_audit" name="test_rl_rejects_invalid_actions[9]" time="0.002" /><testcase classname="tests.test_principal_audit" name="test_rl_rejects_invalid_actions[True]" time="0.002" /><testcase classname="tests.test_principal_audit" name="test_rl_rejects_invalid_actions[0]" time="0.002" /><testcase classname="tests.test_principal_audit" name="test_nan_policy_candidate_rejected_even_when_validation_bypassed" time="0.000" /><testcase classname="tests.test_principal_audit" name="test_enter_safe_does_not_claim_a_signal_was_sent" time="0.001"><failure message="AssertionError: assert SignalState(phase=&lt;Phase.NS: 'north_south'&gt;, stage=&lt;SignalStage.ALL_RED: 'all_red'&gt;, elapsed_seconds=0.0) is None&#10; +  where SignalState(phase=&lt;Phase.NS: 'north_south'&gt;, stage=&lt;SignalStage.ALL_RED: 'all_red'&gt;, elapsed_seconds=0.0) = HardwareStateStages(requested=SignalState(phase=&lt;Phase.NS: 'north_south'&gt;, stage=&lt;SignalStage.ALL_RED: 'all_red'&gt;, ela...', sequence=1, requested_at=1791126076.9931104, approved_at=1791126076.9931104, sent_at=1791126076.9930625, error=None).command_sent">def test_enter_safe_does_not_claim_a_signal_was_sent() -&gt; None:
+        from types import SimpleNamespace
+    
+        now = time.time()
+        command = HardwareCommand(device_id="device", device_boot_id="boot",
+                                  controller_instance="controller", sequence=1, kind="ENTER_SAFE",
+                                  safe_mode_id="site-approved-program", issued_at=now, expires_at=now+2)
+        signal = SignalState(phase=Phase.NS, stage=SignalStage.ALL_RED, elapsed_seconds=0)
+        stages = capture_hardware_state(SimpleNamespace(delivery=SimpleNamespace(command_sent=command)),
+                                       signal, signal)
+&gt;       assert stages.command_sent is None
+E       AssertionError: assert SignalState(phase=&lt;Phase.NS: 'north_south'&gt;, stage=&lt;SignalStage.ALL_RED: 'all_red'&gt;, elapsed_seconds=0.0) is None
+E        +  where SignalState(phase=&lt;Phase.NS: 'north_south'&gt;, stage=&lt;SignalStage.ALL_RED: 'all_red'&gt;, elapsed_seconds=0.0) = HardwareStateStages(requested=SignalState(phase=&lt;Phase.NS: 'north_south'&gt;, stage=&lt;SignalStage.ALL_RED: 'all_red'&gt;, ela...', sequence=1, requested_at=1791126076.9931104, approved_at=1791126076.9931104, sent_at=1791126076.9930625, error=None).command_sent
+
+tests\test_principal_audit.py:105: AssertionError</failure></testcase><testcase classname="tests.test_principal_audit" name="test_device_watchdog_network_partition_and_replay" time="0.001" /><testcase classname="tests.test_principal_audit" name="test_shadow_timeout_does_not_reach_mock_hardware" time="0.273" /></testsuite></testsuites>

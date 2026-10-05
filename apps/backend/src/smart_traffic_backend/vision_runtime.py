@@ -20,6 +20,7 @@ from traffic_vision.models import (
 )
 
 from smart_traffic_backend.config import Settings
+from smart_traffic_backend.improvement import ImprovementLog, ImprovementWriter
 from smart_traffic_backend.safety_architecture import (
     ComponentHealth,
     DecisionAudit,
@@ -29,6 +30,7 @@ from smart_traffic_backend.safety_architecture import (
     OperationalHealth,
     PolicyCandidate,
     PolicyMode,
+    PolicyWorker,
     RecoveryChecks,
     RecoveryStateMachine,
     SafetyStatus,
@@ -102,7 +104,12 @@ class VisionRuntime:
         self._started = 0.0
         self.policy_mode = PolicyMode.DISABLED
         self.policy_proposer: LearnedPolicyProposer | None = None
+        self._policy_worker = PolicyWorker()
         self.decision_journal = DecisionJournal()
+        self.improvement_log = ImprovementLog(settings.improvement_log_path)
+        self.improvement_writer = ImprovementWriter(self.improvement_log)
+        self._audit_observation: TrafficState | None = None
+        self._review_tracks: set[str] = set()
         self._observation_sequence = 0
         self._latest_decision: DecisionAudit | None = None
         self._policy_task: asyncio.Task[None] | None = None
@@ -178,12 +185,15 @@ class VisionRuntime:
     def _schedule_policy_audit(
         self, traffic: TrafficState, baseline_phase: str, baseline_green_seconds: float
     ) -> None:
+        self._audit_observation = traffic
         self._observation_sequence += 1
         sequence = self._observation_sequence
         mode, proposer = self.policy_mode, self.policy_proposer
         if mode not in (PolicyMode.SHADOW, PolicyMode.ADVISORY):
             return
-        if self._policy_task is not None and not self._policy_task.done():
+        if (
+            self._policy_task is not None and not self._policy_task.done()
+        ) or self._policy_worker.busy:
             record = DecisionAudit(
                 observation_sequence=sequence,
                 actual_baseline_action={
@@ -205,7 +215,9 @@ class VisionRuntime:
             else:
                 try:
                     async with asyncio.timeout(self.settings.hardware_timeout_seconds):
-                        result = await proposer.propose(traffic)
+                        result = await self._policy_worker.propose(
+                            proposer, traffic, self.settings.hardware_timeout_seconds
+                        )
                     candidate = PolicyCandidate.model_validate(result)
                 except TimeoutError:
                     error = "policy_timeout"
@@ -242,6 +254,15 @@ class VisionRuntime:
             self._update_latest_decision(self.decision_journal.snapshot()[-1])
 
     def _update_latest_decision(self, record: DecisionAudit) -> None:
+        try:
+            self.improvement_writer.submit(
+                "proposal",
+                record.observation_sequence,
+                record.ai_proposed_action,
+                record.policy_error,
+            )
+        except Exception:
+            logger.exception("Could not persist policy review evidence")
         if (
             self._latest_decision is None
             or record.observation_sequence >= self._latest_decision.observation_sequence
@@ -260,7 +281,11 @@ class VisionRuntime:
     async def _apply(self, signals: SignalState, requested: SignalState | None = None) -> None:
         try:
             async with asyncio.timeout(self.settings.hardware_timeout_seconds):
-                await self.hardware.apply(signals)
+                enter_safe = getattr(self.hardware, "enter_safe", None)
+                if self.engine.safety.faulted and enter_safe is not None:
+                    await enter_safe()
+                else:
+                    await self.hardware.apply(signals)
         except Exception as error:
             self._record_hardware(requested or signals, signals, type(error).__name__)
             self.health = self.health.model_copy(
@@ -276,6 +301,35 @@ class VisionRuntime:
         self, requested: SignalState, approved: SignalState, error: str | None = None
     ) -> None:
         self.hardware_state = capture_hardware_state(self.hardware, requested, approved, error)
+        delivery = getattr(self.hardware, "delivery", None)
+        ack = getattr(delivery, "hardware_acknowledged", None)
+        observation = self._audit_observation
+        if observation is not None:
+            analyzed = self.pipeline.latest_analysis
+            evidence: dict[str, float | bool] = {}
+            if analyzed is not None:
+                current = {track.track_uid for track in analyzed.analysis.tracks}
+                # A churn candidate is not an identity error or verified fragmentation.
+                lost = self._review_tracks - current
+                added = current - self._review_tracks
+                if lost and added:
+                    evidence["fragmentations"] = float(min(len(lost), len(added)))
+                evidence["unusual_scene"] = analyzed.analysis.traffic.unknown_count > 0
+                self._review_tracks = current
+            try:
+                self.improvement_writer.submit(
+                    "decision",
+                    observation,
+                    self._observation_sequence,
+                    [self.settings.vision.source_id] if self.settings.mode == "vision" else [],
+                    self.settings.vision_model_version,
+                    self.settings.controller_policy_version,
+                    self.hardware_state.model_dump(mode="json"),
+                    ack.model_dump(mode="json") if ack else None,
+                    evidence,
+                )
+            except Exception:
+                logger.exception("Improvement journal unavailable; control remains authoritative")
         delivery = getattr(self.hardware, "delivery", None)
         ack = getattr(delivery, "hardware_acknowledged", None)
         self.health = self.health.model_copy(
@@ -336,7 +390,12 @@ class VisionRuntime:
                 <= self.settings.vision.health.stage_timeout_seconds
             ),
             controller=self.task is not None and not self.task.done() and self.failure is None,
-            hardware=self.health.hardware.status == "healthy" and ack_at is not None,
+            hardware=bool(
+                self.health.hardware.status == "healthy"
+                and ack_at is not None
+                and 0 <= now - ack_at <= self.settings.hardware_timeout_seconds
+                and self.hardware_state.physically_confirmed is not None
+            ),
         )
 
     def begin_recovery(self) -> None:
@@ -348,10 +407,14 @@ class VisionRuntime:
         return checks
 
     def confirm_recovery(self) -> None:
+        if self.engine.safety.faulted:
+            raise RuntimeError("Latched safety requires supervised runtime/device rearm")
         if not self.ready:
             raise RuntimeError(
                 "A live, fresh control runtime is required for recovery confirmation"
             )
+        if not self.recovery_checks().passed:
+            raise RuntimeError("Recovery evidence expired or hardware is unconfirmed")
         self.recovery.confirm_operator()
         self.policy_mode = PolicyMode.DISABLED
 
@@ -407,6 +470,8 @@ class VisionRuntime:
                 core_state = self.pipeline.analyzer.to_core_state(measurement)
                 self._record_policy_outcome(core_state)
                 self.engine.advance(core_state, now)
+                if self.engine.safety.faulted:
+                    self.recovery.fault("perception_fault_latched")
                 requested = SignalState(
                     phase=self.engine.decision.phase,
                     stage=SignalStage.GREEN,
@@ -500,3 +565,5 @@ class VisionRuntime:
             finally:
                 async with asyncio.timeout(self.settings.hardware_timeout_seconds):
                     await self.hardware.close()
+                await asyncio.to_thread(self.improvement_writer.close)
+                self._policy_worker.close()

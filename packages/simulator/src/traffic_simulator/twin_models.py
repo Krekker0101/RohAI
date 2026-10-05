@@ -238,6 +238,8 @@ class ObservedTrack(Model):
 
 
 class ObservedTrafficState(Model):
-    source: Literal["digital_twin_observation"] = "digital_twin_observation"
+    source: Literal["digital_twin_observation", "live_camera_observation"] = (
+        "digital_twin_observation"
+    )
     traffic: TrafficState
     tracks: tuple[ObservedTrack, ...] = ()

@@ -75,7 +75,10 @@ class DeviceKernel:
             self.entered_at = now
 
     def tick(self, now: float) -> None:
-        if now >= self.lease_deadline:
+        if now >= self.lease_deadline or (
+            self.signal.stage == SignalStage.GREEN
+            and now - self.entered_at >= self.timing.max_green_seconds
+        ):
             self.enter_safe(now)
         if self.watchdog_latched and self.signal.stage == SignalStage.YELLOW:
             clearance = (

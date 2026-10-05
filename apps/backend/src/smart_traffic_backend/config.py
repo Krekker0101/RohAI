@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     operator_token: SecretStr | None = None
     cors_origins: tuple[str, ...] = ()
     dashboard_directory: Path = Path("apps/dashboard/dist")
+    improvement_log_path: Path = Path(".runtime/improvement/decisions.sqlite3")
+    vision_model_version: str = "UNVERIFIED_LOCAL_MODEL"
+    controller_policy_version: str = "deterministic-baseline-v1"
     timing: Timing = Field(default_factory=Timing)
     scenario: Scenario = Field(default_factory=Scenario)
     vision: VisionSettings = Field(default_factory=VisionSettings)

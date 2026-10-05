@@ -10,6 +10,7 @@ from traffic_core.ports import HardwareController
 from traffic_simulator.engine import SimulationEngine
 
 from smart_traffic_backend.config import Settings
+from smart_traffic_backend.improvement import ImprovementLog, ImprovementWriter
 from smart_traffic_backend.safety_architecture import (
     ComponentHealth,
     DecisionAudit,
@@ -19,6 +20,7 @@ from smart_traffic_backend.safety_architecture import (
     OperationalHealth,
     PolicyCandidate,
     PolicyMode,
+    PolicyWorker,
     RecoveryStateMachine,
     SafetyStatus,
     capture_hardware_state,
@@ -40,7 +42,11 @@ class Runtime:
         self.comparison_lock = threading.Lock()
         self.policy_mode = PolicyMode.DISABLED
         self.policy_proposer: LearnedPolicyProposer | None = None
+        self._policy_worker = PolicyWorker()
         self.decision_journal = DecisionJournal()
+        self.improvement_log = ImprovementLog(settings.improvement_log_path)
+        self.improvement_writer = ImprovementWriter(self.improvement_log)
+        self._audit_observation: TrafficState | None = None
         self._observation_sequence = 0
         self._latest_decision: DecisionAudit | None = None
         self._policy_task: asyncio.Task[None] | None = None
@@ -83,6 +89,23 @@ class Runtime:
         self.hardware_state = capture_hardware_state(self.hardware, requested, approved, error)
         delivery = getattr(self.hardware, "delivery", None)
         ack = getattr(delivery, "hardware_acknowledged", None)
+        observation = self._audit_observation
+        if observation is not None:
+            try:
+                self.improvement_writer.submit(
+                    "decision",
+                    observation,
+                    self._observation_sequence,
+                    [self.settings.vision.source_id] if self.settings.mode == "vision" else [],
+                    self.settings.vision_model_version,
+                    self.settings.controller_policy_version,
+                    self.hardware_state.model_dump(mode="json"),
+                    ack.model_dump(mode="json") if ack else None,
+                )
+            except Exception:
+                logger.exception("Improvement journal unavailable; control remains authoritative")
+        delivery = getattr(self.hardware, "delivery", None)
+        ack = getattr(delivery, "hardware_acknowledged", None)
         self.health = self.health.model_copy(
             update={
                 "hardware": ComponentHealth(
@@ -122,13 +145,16 @@ class Runtime:
         baseline_green_seconds: float,
         safety_response: str,
     ) -> None:
+        self._audit_observation = traffic
         self._observation_sequence += 1
         observation_sequence = self._observation_sequence
         mode = self.policy_mode
         proposer = self.policy_proposer
         if mode in (PolicyMode.DISABLED, PolicyMode.ACTIVE):
             return
-        if self._policy_task is not None and not self._policy_task.done():
+        if (
+            self._policy_task is not None and not self._policy_task.done()
+        ) or self._policy_worker.busy:
             record = DecisionAudit(
                 observation_sequence=observation_sequence,
                 actual_baseline_action={
@@ -150,7 +176,9 @@ class Runtime:
             else:
                 try:
                     async with asyncio.timeout(self.settings.hardware_timeout_seconds):
-                        result = await proposer.propose(traffic)
+                        result = await self._policy_worker.propose(
+                            proposer, traffic, self.settings.hardware_timeout_seconds
+                        )
                     candidate = PolicyCandidate.model_validate(result)
                 except TimeoutError:
                     error = "policy_timeout"
@@ -187,6 +215,15 @@ class Runtime:
             self._update_latest_decision(self.decision_journal.snapshot()[-1])
 
     def _update_latest_decision(self, record: DecisionAudit) -> None:
+        try:
+            self.improvement_writer.submit(
+                "proposal",
+                record.observation_sequence,
+                record.ai_proposed_action,
+                record.policy_error,
+            )
+        except Exception:
+            logger.exception("Could not persist policy review evidence")
         if (
             self._latest_decision is None
             or record.observation_sequence >= self._latest_decision.observation_sequence
@@ -288,3 +325,5 @@ class Runtime:
         await self._all_red()
         async with asyncio.timeout(self.settings.hardware_timeout_seconds):
             await self.hardware.close()
+        await asyncio.to_thread(self.improvement_writer.close)
+        self._policy_worker.close()

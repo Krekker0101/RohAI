@@ -8,6 +8,7 @@ from traffic_vision.dataset.files import write_new_json
 from traffic_vision.dataset.schema import Split
 from traffic_vision.evaluation.analytics import analytics_benchmark
 from traffic_vision.evaluation.vision import code_fingerprint, finish_report, run_model
+from traffic_vision.manifest import ModelManifest
 from traffic_vision.settings import VisionSettings
 from traffic_vision.training.gates import compare, evaluation_protocol, validate_policy
 from traffic_vision.training.io import read_verified
@@ -54,6 +55,7 @@ def evaluate_candidate(
     )
     settings = settings.model_copy(
         update={
+            "deployment_domain": ModelManifest.load(package_path / "model.json").deployment_domain,
             "model_package": package_path,
             "model_registry": None,
             "model_path": package_path / "weights.pt",

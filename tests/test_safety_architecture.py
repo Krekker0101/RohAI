@@ -1,11 +1,20 @@
 import pytest
+from pydantic import ValidationError
 from smart_traffic_backend.safety_architecture import (
     DecisionAudit,
     DecisionJournal,
+    PolicyCandidate,
     RecoveryChecks,
     RecoveryState,
     RecoveryStateMachine,
 )
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -1.0])
+def test_policy_revalidates_untrusted_constructed_instances(value: float) -> None:
+    candidate = PolicyCandidate.model_construct(phase="north_south", green_seconds=value)
+    with pytest.raises(ValidationError):
+        PolicyCandidate.model_validate(candidate)
 
 
 def test_recovery_requires_all_checks_and_operator_confirmation() -> None:

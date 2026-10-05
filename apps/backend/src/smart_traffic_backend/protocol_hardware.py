@@ -162,6 +162,20 @@ class ProtocolHardwareController:
                 raise
 
     async def refresh_feedback(self) -> HardwareFeedback:
+        try:
+            return await self._refresh_feedback()
+        except BaseException as error:
+            self.delivery = self.delivery.model_copy(
+                update={
+                    "physically_confirmed": None,
+                    "emulated_feedback": None,
+                    "status": "FAULT",
+                    "error": type(error).__name__,
+                }
+            )
+            raise
+
+    async def _refresh_feedback(self) -> HardwareFeedback:
         assert self.capability is not None
         async with asyncio.timeout(self.requirements.feedback_timeout_s):
             feedback = await self.transport.feedback()
@@ -179,6 +193,14 @@ class ProtocolHardwareController:
             raise ValueError("Replayed feedback")
         self.feedback_sequence = feedback.sample_sequence
         command = self.delivery.command_sent
+        if command is not None and command.kind == "ENTER_SAFE":
+            if (
+                feedback.command_id != command.command_id
+                or feedback.command_sequence != command.sequence
+                or not feedback.watchdog_latched
+                or feedback.safe_mode_id not in (None, self.requirements.safe_mode_id)
+            ):
+                raise ValueError("Safe-program feedback disagrees with acknowledged command")
         if command is not None and command.kind == "SIGNAL":
             assert command.requested_state is not None
             if (

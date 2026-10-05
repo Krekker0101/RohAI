@@ -3,12 +3,14 @@
 import hashlib
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, model_validator
 from traffic_core.models import Model, ObjectKind
 
 
 class ModelManifest(Model):
+    deployment_domain: Literal["UNSPECIFIED", "PHYSICAL_MAKET", "REAL_ROAD"] = "UNSPECIFIED"
     model_id: str = Field(min_length=1)
     model_version: str = Field(min_length=1)
     architecture: str = Field(min_length=1)

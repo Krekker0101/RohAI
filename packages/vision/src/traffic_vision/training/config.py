@@ -29,6 +29,7 @@ class Augmentation(Model):
 
 
 class TrainingConfig(Model):
+    deployment_domain: Literal["UNSPECIFIED", "PHYSICAL_MAKET", "REAL_ROAD"] = "UNSPECIFIED"
     schema_version: Literal["rohai-training-1"] = "rohai-training-1"
     experiment: Identifier
     base_model: Path = Field(default_factory=lambda: Path("datasets/models/yolo26n.pt"))
