@@ -17,3 +17,10 @@ class MockHardwareController:
 
     async def close(self) -> None:
         self.closed = True
+
+
+class ReplayHardwareAdapter(MockHardwareController):
+    """Software output sink. Never opens a transport or executes physical commands."""
+
+
+MockHardwareAdapter = MockHardwareController

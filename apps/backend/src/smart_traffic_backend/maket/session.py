@@ -1,5 +1,6 @@
 """Bounded recording consumer; video/write work never runs on the control loop."""
 
+import hashlib
 import json
 import queue
 import threading
@@ -18,21 +19,15 @@ class SessionRecorder:
         self.config = config
         self.id = uuid.uuid4().hex
         self.path = config.session_directory / self.id
-        self.path.mkdir(parents=True, exist_ok=False)
-        sessions = sorted(config.session_directory.iterdir(), key=lambda p: p.stat().st_mtime)
-        # No recursive deletion: only own flat UUID session files with explicit names.
-        for directory in sessions[: -config.max_sessions]:
-            if (
-                directory.is_dir()
-                and not directory.is_symlink()
-                and directory.resolve().is_relative_to(config.session_directory.resolve())
-                and len(directory.name) == 32
-                and all(c in "0123456789abcdef" for c in directory.name)
-            ):
-                for name in ("events.jsonl", "video.avi", "session.json"):
-                    (directory / name).unlink(missing_ok=True)
-                if not any(directory.iterdir()):
-                    directory.rmdir()
+        config.session_directory.mkdir(parents=True, exist_ok=True)
+        sessions = [
+            p
+            for p in config.session_directory.iterdir()
+            if p.is_dir() and len(p.name) == 32 and all(c in "0123456789abcdef" for c in p.name)
+        ]
+        self.enabled = len(sessions) < config.max_sessions
+        if self.enabled:
+            self.path.mkdir(parents=True, exist_ok=False)
         recorded_config = config.model_dump(mode="json")
         if config.camera.source == "rtsp":
             parsed = urlsplit(config.camera.uri)
@@ -44,40 +39,76 @@ class SessionRecorder:
             recorded_config["camera"]["uri"] = urlunsplit(
                 (parsed.scheme, host, parsed.path, "", "")
             )
-        (self.path / "session.json").write_text(
-            json.dumps(
-                {
-                    "id": self.id,
-                    "mode": "PHYSICAL_MAKET",
-                    "created_at": time.time(),
-                    "config": recorded_config,
-                    "ground_truth": False,
-                }
-            ),
-            encoding="utf-8",
+        manifest = json.dumps(
+            {
+                "id": self.id,
+                "schema_version": 2,
+                "mode": "PHYSICAL_MAKET"
+                if config.output_mode == "PHYSICAL_OUTPUT"
+                else "REAL_VISION",
+                "created_at": time.time(),
+                "config": recorded_config,
+                "configuration_sha256": hashlib.sha256(
+                    json.dumps(recorded_config, sort_keys=True).encode()
+                ).hexdigest(),
+                "camera_id": config.camera.source_id,
+                "privacy": {
+                    "video_default": False,
+                    "retention_days": config.retention_days,
+                    "storage": "LOCAL_ONLY",
+                    "automatic_deletion": False,
+                },
+                "ground_truth": False,
+            }
         )
-        self.queue: queue.Queue[tuple[str, Any]] = queue.Queue(maxsize=32)
+        if self.enabled:
+            (self.path / "session.json").write_text(manifest, encoding="utf-8")
+        self.queue: queue.Queue[tuple[int, float, float, str, Any]] = queue.Queue(maxsize=32)
+        self._sequence = 0
+        self._sequence_lock = threading.Lock()
+        self.video_frames = 0
+        self.events_written = 0
         self.stop_event = threading.Event()
         self.dropped = 0
-        self.error: str | None = None
+        self.error: str | None = None if self.enabled else "SESSION_STORAGE_FULL"
         self.record_video = False
         self.started = time.monotonic()
-        self.thread = threading.Thread(target=self._run, daemon=True, name="maket-recording")
+        self.thread = threading.Thread(
+            target=self._run if self.enabled else lambda: None, daemon=True, name="maket-recording"
+        )
         self.thread.start()
 
     def submit(self, kind: str, payload: Any) -> None:
-        try:
-            self.queue.put_nowait((kind, payload))
-        except queue.Full:
-            self.dropped += 1
+        with self._sequence_lock:
+            self._sequence += 1
+            if not self.enabled or self.error is not None:
+                self.dropped += 1
+                return
+            try:
+                self.queue.put_nowait(
+                    (self._sequence, time.time(), time.monotonic(), kind, payload)
+                )
+            except queue.Full:
+                self.dropped += 1
+
+    def submit_frame(self, frame: Any, metadata: dict[str, Any]) -> None:
+        if not self.record_video:
+            return
+        if self.queue.qsize() >= 2:
+            with self._sequence_lock:
+                self._sequence += 1
+                self.dropped += 1
+            return
+        self.submit("frame", {"image": frame, "metadata": metadata})
 
     def _run(self) -> None:
         writer = None
+        video_size: tuple[int, int] | None = None
         try:
             with (self.path / "events.jsonl").open("a", encoding="utf-8") as events:
                 while not self.stop_event.is_set() or not self.queue.empty():
                     try:
-                        kind, payload = self.queue.get(timeout=0.1)
+                        sequence, timestamp, monotonic, kind, payload = self.queue.get(timeout=0.1)
                     except queue.Empty:
                         continue
                     size = sum(p.stat().st_size for p in self.path.iterdir() if p.is_file())
@@ -85,13 +116,13 @@ class SessionRecorder:
                         time.monotonic() - self.started > self.config.max_recording_seconds
                     ):
                         self.error = "retention_limit_recording_stopped"
+                        self.record_video = False
                         self.dropped += 1
                         continue
                     if kind == "frame":
-                        if not self.record_video:
-                            continue
                         if writer is None:
-                            h, w = payload.shape[:2]
+                            h, w = payload["image"].shape[:2]
+                            video_size = (w, h)
                             writer = cv2.VideoWriter(
                                 str(self.path / "video.avi"),
                                 cv2.VideoWriter.fourcc(*"MJPG"),
@@ -100,13 +131,30 @@ class SessionRecorder:
                             )
                             if not writer.isOpened():
                                 raise OSError("Video writer unavailable")
-                        writer.write(payload)
-                    else:
-                        events.write(
-                            json.dumps({"timestamp": time.time(), "kind": kind, "payload": payload})
-                            + "\n"
+                        h, w = payload["image"].shape[:2]
+                        if video_size != (w, h):
+                            self.error = "video_resolution_changed_recording_stopped"
+                            self.record_video = False
+                            self.dropped += 1
+                            continue
+                        writer.write(payload["image"])
+                        payload = {**payload["metadata"], "recorded_video_index": self.video_frames}
+                        self.video_frames += 1
+                        kind = "recorded_frame"
+                    events.write(
+                        json.dumps(
+                            {
+                                "sequence": sequence,
+                                "timestamp": timestamp,
+                                "monotonic": monotonic,
+                                "kind": kind,
+                                "payload": payload,
+                            }
                         )
-                        events.flush()
+                        + "\n"
+                    )
+                    self.events_written += 1
+                    events.flush()
         except Exception as error:
             self.error = str(error)
         finally:
@@ -116,3 +164,21 @@ class SessionRecorder:
     def close(self) -> None:
         self.stop_event.set()
         self.thread.join(timeout=2)
+        if not self.enabled:
+            return
+        if self.thread.is_alive():
+            self.error = "recording_shutdown_timeout"
+            raise TimeoutError(self.error)
+        manifest_path = self.path / "session.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest.update(
+            closed_at=time.time(),
+            dropped_events=self.dropped,
+            events_written=self.events_written,
+            video_frames=self.video_frames,
+            error=self.error,
+            complete=self.error is None and self.dropped == 0,
+        )
+        from smart_traffic_backend.maket.calibration import atomic_write
+
+        atomic_write(manifest_path, json.dumps(manifest, indent=2).encode())

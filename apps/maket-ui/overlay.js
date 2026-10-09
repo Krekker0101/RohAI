@@ -19,3 +19,10 @@ export function realTracks(state) {
     t.bbox && ['x1','y1','x2','y2'].every(k => Number.isFinite(t.bbox[k])) &&
     t.bbox.x2 > t.bbox.x1 && t.bbox.y2 > t.bbox.y1) : [];
 }
+
+export function frameTracks(state, frame) {
+  const v = state?.vision_state;
+  if (!v?.fresh || !frame || v.frame_id !== frame.id || v.stream_epoch !== frame.epoch ||
+      v.frame_width !== frame.width || v.frame_height !== frame.height) return [];
+  return realTracks(state).filter(t => t.visible !== false);
+}

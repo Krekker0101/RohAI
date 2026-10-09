@@ -12,6 +12,7 @@ import zlib
 from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
+from traffic_core.device_state import DeviceLifecycle, DeviceState
 from traffic_core.models import SignalStage, SignalState
 
 from smart_traffic_backend.maket.config import SerialSettings
@@ -41,6 +42,7 @@ MASKS = {
 class DeviceAck(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
     protocol: int = Field(ge=1, le=1)
+    firmware_version: str
     boot: int = Field(ge=1, le=4294967295)
     session: str = Field(pattern=r"^[a-f0-9]{32}$")
     command_id: str = Field(pattern=r"^[a-f0-9]{32}$")
@@ -104,8 +106,29 @@ class Esp32TrafficLightController:
         self.fault: str | None = None
         self._lock = asyncio.Lock()
         self._inflight: asyncio.Task[dict[str, Any]] | None = None
+        self.lifecycle = DeviceLifecycle()
+        self.desired_phase: str | None = None
+        self.confirmed_phase: str | None = None
+        self.read_only = False
+        self.event_sink: Any = None
 
-    async def connect(self) -> None:
+    async def connect(self, *, read_only: bool = False) -> None:
+        try:
+            self.read_only = read_only
+            await self._connect()
+        except (Exception, asyncio.CancelledError) as error:
+            self.connected = False
+            self.confirmed_phase = None
+            self.fault = str(error)
+            self.lifecycle.transition(DeviceState.FAULT, "connection_failed")
+            raise
+
+    async def _connect(self) -> None:
+        self.lifecycle.transition(DeviceState.CONNECTING, "explicit_connect")
+        self.session = uuid.uuid4().hex
+        self.boot, self.sequence = 0, 0
+        self.ack = None
+        self.confirmed_phase = None
         if self.port is None:
             import serial  # type: ignore[import-untyped]
 
@@ -121,17 +144,21 @@ class Esp32TrafficLightController:
                 serial.Serial,
                 selected,
                 self.settings.baudrate,
-                timeout=self.settings.timeout_seconds,
+                timeout=self.settings.timeout_seconds / 2,
                 write_timeout=self.settings.timeout_seconds,
             )
             # Most USB development boards reboot on DTR/open; no control during boot.
             await asyncio.sleep(2)
-        response = await self.command("HELLO")
+        response = await self.command("IDENTIFY" if self.read_only else "HELLO")
         if response.get("device_id") != self.settings.device_id:
             raise ValueError("Wrong ESP32 device identity")
         if response.get("domain") != "PHYSICAL_MAKET" or not response.get("watchdog_present"):
             raise ValueError("Firmware domain/watchdog mismatch")
+        if response.get("firmware_version") != "1.0.1":
+            self.lifecycle.transition(DeviceState.FAULT, "firmware_incompatible")
+            raise ValueError("Incompatible ESP32 firmware version")
         self.connected = True
+        self.lifecycle.transition(DeviceState.READY, "identity_and_protocol_verified")
 
     def _exchange(self, packet: dict[str, Any]) -> dict[str, Any]:
         assert self.port is not None
@@ -139,8 +166,21 @@ class Esp32TrafficLightController:
         if self.port.write(raw) != len(raw):
             raise OSError("Partial serial write")
         deadline = time.monotonic() + self.settings.timeout_seconds
+        retry_at = time.monotonic() + self.settings.timeout_seconds / 2
+        retried = False
         while time.monotonic() < deadline:
+            if (
+                not retried
+                and time.monotonic() >= retry_at
+                and packet["kind"] in {"SIGNAL", "STATUS"}
+            ):
+                # Same identity/deadline: firmware duplicate handling never renews the lease.
+                if self.port.write(raw) != len(raw):
+                    raise OSError("Partial serial retry write")
+                retried = True
             line = self.port.read_until(size=1536)
+            if time.monotonic() >= deadline:
+                break  # A valid but late ACK is not confirmation.
             if not line.endswith(b"\n") or len(line) >= 1536:
                 continue
             try:
@@ -157,6 +197,8 @@ class Esp32TrafficLightController:
                 continue
             ack: dict[str, Any] = json.loads(payload)
             ack = DeviceAck.model_validate(ack).model_dump()
+            if ack["firmware_version"] != "1.0.1":
+                raise ValueError("Incompatible ESP32 firmware version")
             if (
                 ack.get("protocol") != 1
                 or ack.get("session") != self.session
@@ -164,12 +206,14 @@ class Esp32TrafficLightController:
                 or ack.get("sequence") != packet["sequence"]
             ):
                 continue
-            if packet["kind"] != "HELLO" and ack.get("boot") != self.boot:
+            if packet["kind"] not in {"HELLO", "IDENTIFY"} and ack.get("boot") != self.boot:
                 raise RuntimeError("ESP32 restarted; operator rearm required")
             if not ack.get("accepted"):
                 raise RuntimeError(f"ESP32 rejected: {ack.get('reason')}")
             if ack["device_id"] != self.settings.device_id or ack["domain"] != "PHYSICAL_MAKET":
                 raise ValueError("ACK device/domain mismatch")
+            if not ack["watchdog_present"]:
+                raise ValueError("Device watchdog unavailable")
             if ack["actual_phase"] not in MASKS or ack["output_mask"] != MASKS[ack["actual_phase"]]:
                 raise ValueError("ACK phase/output conflict")
             if packet["kind"] == "SIGNAL" and ack["actual_phase"] != packet["phase"]:
@@ -181,12 +225,29 @@ class Esp32TrafficLightController:
                 or ack["estop"]
             ):
                 raise ValueError("Electrical sense/watchdog disagrees with SIGNAL ACK")
+            if packet["kind"] in {"ARM", "ESTOP"} and (
+                ack["actual_phase"] != "ALL_RED"
+                or ack["sense_mask"] != MASKS["ALL_RED"]
+                or ack["watchdog"] != ("OK" if packet["kind"] == "ARM" else "LATCHED")
+                or (packet["kind"] == "ARM" and (ack["sense_fault"] or ack["estop"]))
+            ):
+                raise ValueError("Safe state/ARM electrical readback not confirmed")
             return ack
         raise TimeoutError("ESP32 ACK missing/corrupt; no mock fallback")
 
     async def command(self, kind: str, phase: str = "ALL_RED") -> dict[str, Any]:
+        if kind not in {"HELLO", "IDENTIFY", "STATUS", "ARM", "SIGNAL", "ESTOP"}:
+            raise ValueError("Invalid command kind")
+        if self.read_only and kind != "IDENTIFY":
+            raise ValueError("Read-only inspection forbids hardware control")
+        if kind == "ARM" and not self.settings.independent_protection_verified:
+            raise ValueError("ARM blocked: independent physical protection has not been verified")
         if phase not in PHASES:
             raise ValueError("Invalid phase")
+        if self._lock.locked():
+            raise RuntimeError("Serial command in flight; queueing forbidden")
+        if self.fault and kind not in {"HELLO", "IDENTIFY", "ESTOP"}:
+            raise RuntimeError("Transport fault latched; reconnect and local rearm required")
         async with self._lock:
             if self._inflight is not None and not self._inflight.done():
                 raise RuntimeError("Serial worker still occupied after timeout")
@@ -210,6 +271,10 @@ class Esp32TrafficLightController:
             }
             packet["crc32"] = checksum(packet)
             self.last_command = packet.copy()
+            if self.event_sink is not None:
+                self.event_sink("hardware_command", packet.copy())
+            if kind == "SIGNAL":
+                self.desired_phase = phase
             self._inflight = asyncio.create_task(asyncio.to_thread(self._exchange, packet))
             self._inflight.add_done_callback(lambda f: f.exception() if not f.cancelled() else None)
             try:
@@ -219,12 +284,36 @@ class Esp32TrafficLightController:
                 self.boot, self.device_time = ack["boot"], ack["uptime_ms"]
                 self.clock_sample = time.monotonic()
                 self.ack = ack
+                if self.event_sink is not None:
+                    self.event_sink("hardware_ack", ack.copy())
+                self.confirmed_phase = (
+                    ack["actual_phase"] if ack["sense_mask"] == ack["output_mask"] else None
+                )
                 self.last_heartbeat = time.time()
                 self.fault = None
+                if kind == "ARM":
+                    self.lifecycle.transition(DeviceState.READY, "local_arm_acknowledged")
+                elif kind == "SIGNAL":
+                    self.lifecycle.transition(DeviceState.ACTIVE, "electrical_ack")
+                elif kind == "ESTOP":
+                    self.lifecycle.transition(DeviceState.EMERGENCY_STOP, "stop_acknowledged")
+                elif (
+                    kind == "STATUS"
+                    and ack["watchdog"] == "LATCHED"
+                    and self.lifecycle.state == DeviceState.ACTIVE
+                ):
+                    self.lifecycle.transition(DeviceState.EMERGENCY_STOP, "device_watchdog_latched")
                 return ack
-            except Exception as error:
+            except (Exception, asyncio.CancelledError) as error:
+                if self.event_sink is not None:
+                    self.event_sink(
+                        "hardware_error", {"command_id": packet["command_id"], "error": str(error)}
+                    )
                 self.connected = False
                 self.fault = str(error)
+                self.confirmed_phase = None
+                if self.lifecycle.state != DeviceState.DISCONNECTED:
+                    self.lifecycle.transition(DeviceState.FAULT, "transaction_failed_or_cancelled")
                 raise
 
     async def apply(self, signals: SignalState) -> None:
@@ -235,6 +324,8 @@ class Esp32TrafficLightController:
 
     async def close(self) -> None:
         self.connected = False
+        self.confirmed_phase = None
+        self.lifecycle.transition(DeviceState.DISCONNECTED, "closed")
         if self.port is not None:
             await asyncio.to_thread(self.port.close)
             self.port = None
@@ -242,6 +333,12 @@ class Esp32TrafficLightController:
     def snapshot(self) -> dict[str, Any]:
         return {
             "connected": self.connected,
+            "command_pending": self._inflight is not None and not self._inflight.done(),
+            "state": self.lifecycle.state,
+            "desired_phase": self.desired_phase,
+            "confirmed_phase": self.confirmed_phase,
+            "physical_execution": not self.read_only,
+            "events": list(self.lifecycle.events),
             "command_sent": self.last_command,
             "ack": self.ack,
             "fault": self.fault,
@@ -249,3 +346,6 @@ class Esp32TrafficLightController:
             "last_heartbeat": self.last_heartbeat,
             "feedback_kind": "electrical_readback_not_optical_lamp_confirmation",
         }
+
+
+SerialESP32Adapter = Esp32TrafficLightController

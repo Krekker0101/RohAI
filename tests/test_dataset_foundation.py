@@ -24,6 +24,7 @@ from traffic_vision.dataset.schema import (
     SourceVideo,
     Split,
     SplitDefinition,
+    UsageRights,
 )
 from traffic_vision.dataset.splits import plan_split
 from traffic_vision.dataset.statistics import CoverageRequirement, statistics
@@ -451,7 +452,19 @@ def test_training_export_contains_only_allowed_assets(
             "purpose": "field",
             "sources": tuple(
                 s.model_copy(
-                    update={"usage": "field", "pretrained_exposure": "audited_no_known_overlap"}
+                    update={
+                        "usage": "field",
+                        "pretrained_exposure": "audited_no_known_overlap",
+                        "rights": UsageRights(
+                            license_id="TEST_ONLY",
+                            owner="fixture",
+                            source_reference="synthetic fixture",
+                            training_allowed=True,
+                            privacy_reviewed=True,
+                            reviewed_by="UNIT_TEST_ONLY",
+                            evidence="Mock metadata for unit contract, never field evidence",
+                        ),
+                    }
                 )
                 for s in spec.sources
             ),

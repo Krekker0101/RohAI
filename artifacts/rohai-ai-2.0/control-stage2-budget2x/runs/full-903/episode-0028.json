@@ -1,0 +1,624 @@
+{
+  "environment_version": "rohai-control-env-v1",
+  "observation_schema": "rohai-observation-v1",
+  "code_sha256": "1d4d1a1059e5205c1218ae794a661b058286f137834073384dbe4f12613c02e3",
+  "seed": 1090328,
+  "scenario": {
+    "schema_version": "rohai-twin-1",
+    "scenario_id": "TRAIN-903-28",
+    "seed": 1090328,
+    "duration_s": 120.0,
+    "step_s": 0.25,
+    "traffic": {
+      "periods": [
+        {
+          "start_s": 0.0,
+          "end_s": 120.0,
+          "vehicles_per_minute": {
+            "north": 8.0,
+            "south": 8.0,
+            "east": 45.0,
+            "west": 40.0
+          },
+          "pedestrians_per_minute": 6.0
+        }
+      ],
+      "lanes_per_approach": 2,
+      "lane_length_m": 65.0,
+      "downstream_capacity": 12,
+      "downstream_travel_s": 5.0,
+      "headway_s": 2.0,
+      "reaction_s": 1.0,
+      "pedestrian_headway_s": 0.5,
+      "crossing_s": 6.0,
+      "turn_probabilities": [
+        0.15,
+        0.7,
+        0.15
+      ],
+      "vehicle_probabilities": [
+        0.7,
+        0.08,
+        0.1,
+        0.07,
+        0.05
+      ],
+      "arrival_distribution": "poisson",
+      "burst_size": 4,
+      "incidents": []
+    },
+    "perception": {
+      "provenance": "engineering_assumption",
+      "benchmark_report_sha256": null,
+      "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+      "missed_detection_probability": 0.03,
+      "false_positives_per_frame": 0.01,
+      "id_switch_probability": 0.001,
+      "occlusion_probability": 0.01,
+      "occlusion_duration_s": 0.5,
+      "position_noise_std_m": 0.15,
+      "wait_noise_std_s": 0.1,
+      "queue_undercount_probability": 0.02,
+      "camera_delay_s": 0.05,
+      "inference_latency_s": 0.1,
+      "frame_drop_probability": 0.01,
+      "fps": 4.0,
+      "minimum_fps": 0.8,
+      "stale_after_s": 3.0,
+      "freeze_detection_s": 1.0,
+      "track_ttl_s": 2.0,
+      "camera_availability": 1.0,
+      "calibration_scale_error": 0.01,
+      "faults": []
+    },
+    "randomization": {
+      "enabled": false,
+      "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+      "arrival_multiplier": {
+        "low": 0.9,
+        "high": 1.1
+      },
+      "headway_multiplier": {
+        "low": 0.95,
+        "high": 1.05
+      },
+      "reaction_multiplier": {
+        "low": 0.9,
+        "high": 1.1
+      },
+      "noise_multiplier": {
+        "low": 0.9,
+        "high": 1.1
+      },
+      "latency_multiplier": {
+        "low": 0.9,
+        "high": 1.1
+      },
+      "occlusion_multiplier": {
+        "low": 0.9,
+        "high": 1.1
+      },
+      "camera_availability": {
+        "low": 0.995,
+        "high": 1.0
+      },
+      "arrival_distributions": [
+        "poisson"
+      ]
+    },
+    "expected_invariants": [
+      "conservation",
+      "finite_storage",
+      "no_conflicting_service",
+      "observed_only_control",
+      "finite_metrics"
+    ]
+  },
+  "timing": {
+    "min_green_seconds": 8.0,
+    "max_green_seconds": 45.0,
+    "fixed_green_seconds": 20.0,
+    "yellow_seconds": 3.0,
+    "all_red_seconds": 2.0,
+    "pedestrian_green_seconds": 10.0,
+    "pedestrian_clearance_seconds": 5.0,
+    "seconds_per_score": 1.8,
+    "waiting_score_per_second": 0.05
+  },
+  "decision_interval_s": 1,
+  "stack_depth": 4,
+  "arrival_tape_sha256": "ba67204e0e5504d0918e6d578b3852d24d7edff6113f17807c25ec818dd67c8a",
+  "reward": {
+    "specification": {
+      "version": "rohai-reward-v1",
+      "objective": "Entity delay plus modest throughput, fairness, spillback and switching costs",
+      "approved_for_training": true,
+      "approval_basis": "Authorized synthetic Stage-2 training; weights frozen before TEST",
+      "total_delay": 1.0,
+      "queue_delay": 0.0,
+      "pedestrian_delay": 0.0,
+      "throughput": 2.0,
+      "maximum_wait": 0.01,
+      "fairness": 0.005,
+      "spillback": 2.0,
+      "switching": 1.0
+    },
+    "total_reward": -9154.809553565265,
+    "components": {
+      "total_delay": {
+        "raw": 8616.458264521256,
+        "unit": "entity*s",
+        "contribution": -8616.458264521256
+      },
+      "queue_delay": {
+        "raw": 8526.797373541274,
+        "unit": "vehicle*s",
+        "contribution": 0.0
+      },
+      "pedestrian_delay": {
+        "raw": 89.66089097998064,
+        "unit": "person*s",
+        "contribution": 0.0
+      },
+      "throughput": {
+        "raw": 78.0,
+        "unit": "entity",
+        "contribution": 156.0
+      },
+      "maximum_wait": {
+        "raw": 6357.520341039801,
+        "unit": "s^2",
+        "contribution": -63.575203410398046
+      },
+      "fairness": {
+        "raw": 3555.2171267220265,
+        "unit": "s^2",
+        "contribution": -17.776085633610137
+      },
+      "spillback": {
+        "raw": 302.5,
+        "unit": "lane*s",
+        "contribution": -605.0
+      },
+      "switching": {
+        "raw": 8.0,
+        "unit": "transition",
+        "contribution": -8.0
+      }
+    }
+  },
+  "fairness": {
+    "all": {
+      "unit": "s",
+      "all_arrivals_lower_bound": {
+        "count": 215,
+        "mean": 40.07655006754074,
+        "median": 32.649185915770104,
+        "p90": 83.13892058044614,
+        "p95": 93.1401310631846,
+        "p99": 99.08373975080171,
+        "maximum": 100.54021120812374
+      },
+      "completed_total_wait": {
+        "count": 78,
+        "mean": 30.913018138553923,
+        "median": 22.73140347798346,
+        "p90": 84.29111236168644,
+        "p95": 92.9460151547363,
+        "p99": 96.24231612238968,
+        "maximum": 98.38654308190138
+      },
+      "unfinished_wait_lower_bound": {
+        "count": 137,
+        "mean": 45.29374342856972,
+        "median": 43.903346935749596,
+        "p90": 82.33273147832496,
+        "p95": 92.56863249960361,
+        "p99": 99.43903064441572,
+        "maximum": 100.54021120812374
+      },
+      "right_censored_count": 137
+    },
+    "by_direction": {
+      "north": {
+        "unit": "s",
+        "all_arrivals_lower_bound": {
+          "count": 17,
+          "mean": 22.78036684591652,
+          "median": 18.822280913219785,
+          "p90": 48.96403248412001,
+          "p95": 56.42512252705605,
+          "p99": 62.422850944511545,
+          "maximum": 63.92228304887542
+        },
+        "completed_total_wait": {
+          "count": 16,
+          "mean": 23.367373161980552,
+          "median": 20.85798355660487,
+          "p90": 49.89516580286688,
+          "p95": 56.89369505966976,
+          "p99": 62.51656545103429,
+          "maximum": 63.92228304887542
+        },
+        "unfinished_wait_lower_bound": {
+          "count": 1,
+          "mean": 13.388265788892042,
+          "median": 13.388265788892042,
+          "p90": 13.388265788892042,
+          "p95": 13.388265788892042,
+          "p99": 13.388265788892042,
+          "maximum": 13.388265788892042
+        },
+        "right_censored_count": 1
+      },
+      "south": {
+        "unit": "s",
+        "all_arrivals_lower_bound": {
+          "count": 21,
+          "mean": 28.614892125605106,
+          "median": 24.222764531159342,
+          "p90": 63.75477823899888,
+          "p95": 64.84669779819171,
+          "p99": 69.34518377532383,
+          "maximum": 70.46980526960685
+        },
+        "completed_total_wait": {
+          "count": 18,
+          "mean": 31.487696699863957,
+          "median": 27.155155063909746,
+          "p90": 64.08235410675672,
+          "p95": 65.69016391890398,
+          "p99": 69.51387699946626,
+          "maximum": 70.46980526960685
+        },
+        "unfinished_wait_lower_bound": {
+          "count": 3,
+          "mean": 11.378064680051997,
+          "median": 11.337797274122579,
+          "p90": 15.005825209545185,
+          "p95": 15.46432870147301,
+          "p99": 15.83113149501527,
+          "maximum": 15.922832193400836
+        },
+        "right_censored_count": 3
+      },
+      "east": {
+        "unit": "s",
+        "all_arrivals_lower_bound": {
+          "count": 84,
+          "mean": 45.80446146277155,
+          "median": 44.89908592749292,
+          "p90": 91.86399523875482,
+          "p95": 96.06613034690113,
+          "p99": 99.7391188026312,
+          "maximum": 100.54021120812374
+        },
+        "completed_total_wait": {
+          "count": 19,
+          "mean": 37.05591690108708,
+          "median": 22.878415257753158,
+          "p90": 94.65776260775553,
+          "p95": 95.88030377857599,
+          "p99": 97.8852952212363,
+          "maximum": 98.38654308190138
+        },
+        "unfinished_wait_lower_bound": {
+          "count": 65,
+          "mean": 48.36172833464855,
+          "median": 48.5137168906101,
+          "p90": 88.22441387042784,
+          "p95": 95.7555494826838,
+          "p99": 99.92250140147888,
+          "maximum": 100.54021120812374
+        },
+        "right_censored_count": 65
+      },
+      "west": {
+        "unit": "s",
+        "all_arrivals_lower_bound": {
+          "count": 93,
+          "mean": 40.65273688849634,
+          "median": 33.70490340507389,
+          "p90": 85.09104683076596,
+          "p95": 91.58331665104262,
+          "p99": 94.16965714588551,
+          "maximum": 95.55662555992465
+        },
+        "completed_total_wait": {
+          "count": 25,
+          "mean": 30.65985929989243,
+          "median": 19.371268822282264,
+          "p90": 90.02464136367861,
+          "p95": 92.43615457067197,
+          "p99": 93.73541984909272,
+          "maximum": 94.04600530261
+        },
+        "unfinished_wait_lower_bound": {
+          "count": 68,
+          "mean": 44.326588943130126,
+          "median": 41.300707985584,
+          "p90": 81.22340961102185,
+          "p95": 89.13756239688848,
+          "p99": 94.54655073665701,
+          "maximum": 95.55662555992465
+        },
+        "right_censored_count": 68
+      }
+    },
+    "by_class": {
+      "car": {
+        "unit": "s",
+        "all_arrivals_lower_bound": {
+          "count": 146,
+          "mean": 43.90912144102873,
+          "median": 39.118192110939496,
+          "p90": 87.43475014727699,
+          "p95": 94.04828972328147,
+          "p99": 98.83242467247719,
+          "maximum": 100.54021120812374
+        },
+        "completed_total_wait": {
+          "count": 45,
+          "mean": 36.83775728956389,
+          "median": 24.253285337464234,
+          "p90": 90.02464136367861,
+          "p95": 93.7871840913456,
+          "p99": 96.64203195819427,
+          "maximum": 98.38654308190138
+        },
+        "unfinished_wait_lower_bound": {
+          "count": 101,
+          "mean": 47.05972923128533,
+          "median": 45.89482491923624,
+          "p90": 82.87412826100311,
+          "p95": 94.04905119683863,
+          "p99": 99.19723688294829,
+          "maximum": 100.54021120812374
+        },
+        "right_censored_count": 101
+      },
+      "bus": {
+        "unit": "s",
+        "all_arrivals_lower_bound": {
+          "count": 13,
+          "mean": 31.736229528223785,
+          "median": 23.187232164096457,
+          "p90": 56.371124517552204,
+          "p95": 61.942582116871456,
+          "p99": 66.83251461755404,
+          "maximum": 68.0549977427247
+        },
+        "completed_total_wait": {
+          "count": 3,
+          "mean": 21.531301591843334,
+          "median": 22.58439169821376,
+          "p90": 23.066664070919916,
+          "p95": 23.12694811750819,
+          "p99": 23.175175354778805,
+          "maximum": 23.187232164096457
+        },
+        "unfinished_wait_lower_bound": {
+          "count": 10,
+          "mean": 34.79770790913792,
+          "median": 37.24669652559703,
+          "p90": 58.886374303944855,
+          "p95": 63.470686023334764,
+          "p99": 67.13813539884671,
+          "maximum": 68.0549977427247
+        },
+        "right_censored_count": 10
+      },
+      "truck": {
+        "unit": "s",
+        "all_arrivals_lower_bound": {
+          "count": 18,
+          "mean": 36.85346029539548,
+          "median": 26.047311406111014,
+          "p90": 82.55801793626381,
+          "p95": 91.70559535261748,
+          "p99": 94.82258526642204,
+          "maximum": 95.60183274487318
+        },
+        "completed_total_wait": {
+          "count": 9,
+          "mean": 36.99532605116539,
+          "median": 25.27083375578989,
+          "p90": 82.26620737392695,
+          "p95": 88.93402005940005,
+          "p99": 94.26827020777856,
+          "maximum": 95.60183274487318
+        },
+        "unfinished_wait_lower_bound": {
+          "count": 9,
+          "mean": 36.711594539625544,
+          "median": 31.106632739354822,
+          "p90": 65.91612140619544,
+          "p95": 78.46707272714859,
+          "p99": 88.50783378391114,
+          "maximum": 91.01802404810178
+        },
+        "right_censored_count": 9
+      },
+      "motorcycle": {
+        "unit": "s",
+        "all_arrivals_lower_bound": {
+          "count": 14,
+          "mean": 51.07264133678137,
+          "median": 47.884218542303906,
+          "p90": 82.93916675332027,
+          "p95": 90.52069357991874,
+          "p99": 97.76417042417665,
+          "maximum": 99.57503963524115
+        },
+        "completed_total_wait": {
+          "count": 4,
+          "mean": 36.36272223207143,
+          "median": 36.73391666739171,
+          "p90": 64.28512946258273,
+          "p95": 67.37746736609478,
+          "p99": 69.85133768890444,
+          "maximum": 70.46980526960685
+        },
+        "unfinished_wait_lower_bound": {
+          "count": 10,
+          "mean": 56.95660897866535,
+          "median": 47.884218542303906,
+          "p90": 87.03825278941012,
+          "p95": 93.30664621232563,
+          "p99": 98.32136095065805,
+          "maximum": 99.57503963524115
+        },
+        "right_censored_count": 10
+      },
+      "bicycle": {
+        "unit": "s",
+        "all_arrivals_lower_bound": {
+          "count": 9,
+          "mean": 36.123932805790595,
+          "median": 22.08519258523677,
+          "p90": 71.9126037213982,
+          "p95": 77.61402625740317,
+          "p99": 82.17516428620716,
+          "maximum": 83.31544879340817
+        },
+        "completed_total_wait": {
+          "count": 3,
+          "mean": 44.74699447381255,
+          "median": 45.239499209132546,
+          "p90": 75.70025887655305,
+          "p95": 79.5078538349806,
+          "p99": 82.55392980172265,
+          "maximum": 83.31544879340817
+        },
+        "unfinished_wait_lower_bound": {
+          "count": 6,
+          "mean": 31.81240197177962,
+          "median": 21.51097218666029,
+          "p90": 65.27621105884815,
+          "p95": 67.16905175612192,
+          "p99": 68.68332431394094,
+          "maximum": 69.0618924533957
+        },
+        "right_censored_count": 6
+      },
+      "pedestrian": {
+        "unit": "s",
+        "all_arrivals_lower_bound": {
+          "count": 15,
+          "mean": 5.977392731998709,
+          "median": 0.2842486105494402,
+          "p90": 15.742931381846072,
+          "p95": 16.55013100172434,
+          "p99": 16.753908121820835,
+          "maximum": 16.80485240184496
+        },
+        "completed_total_wait": {
+          "count": 14,
+          "mean": 5.448044656506328,
+          "median": 0.2533301888015913,
+          "p90": 15.917439708231289,
+          "p95": 16.568325387447242,
+          "p99": 16.757546998965417,
+          "maximum": 16.80485240184496
+        },
+        "unfinished_wait_lower_bound": {
+          "count": 1,
+          "mean": 13.388265788892042,
+          "median": 13.388265788892042,
+          "p90": 13.388265788892042,
+          "p95": 13.388265788892042,
+          "p99": 13.388265788892042,
+          "maximum": 13.388265788892042
+        },
+        "right_censored_count": 1
+      }
+    },
+    "pedestrians": {
+      "unit": "s",
+      "all_arrivals_lower_bound": {
+        "count": 15,
+        "mean": 5.977392731998709,
+        "median": 0.2842486105494402,
+        "p90": 15.742931381846072,
+        "p95": 16.55013100172434,
+        "p99": 16.753908121820835,
+        "maximum": 16.80485240184496
+      },
+      "completed_total_wait": {
+        "count": 14,
+        "mean": 5.448044656506328,
+        "median": 0.2533301888015913,
+        "p90": 15.917439708231289,
+        "p95": 16.568325387447242,
+        "p99": 16.757546998965417,
+        "maximum": 16.80485240184496
+      },
+      "unfinished_wait_lower_bound": {
+        "count": 1,
+        "mean": 13.388265788892042,
+        "median": 13.388265788892042,
+        "p90": 13.388265788892042,
+        "p95": 13.388265788892042,
+        "p99": 13.388265788892042,
+        "maximum": 13.388265788892042
+      },
+      "right_censored_count": 1
+    },
+    "limitation": "Queue wait plus excess downstream hold; unfinished waits are right-censored. Nominal travel/crossing time is excluded."
+  },
+  "service_opportunities": {
+    "north_south": {
+      "last_service_s": 103.75,
+      "has_served": true
+    },
+    "east_west": {
+      "last_service_s": 116.75,
+      "has_served": true
+    },
+    "pedestrian": {
+      "last_service_s": 87.75,
+      "has_served": true
+    }
+  },
+  "supervisor_interventions": {
+    "perception_unreliable": 1,
+    "accepted": 99,
+    "duration_clamped": 12,
+    "minimum_green": 192,
+    "green_budget_exhausted": 1,
+    "clearance_locked": 175
+  },
+  "invariants_passed": true,
+  "arrived": 215,
+  "departed": 78,
+  "remaining": 137,
+  "pedestrian_departed": 14,
+  "fault_latched": false,
+  "training_started": true,
+  "held_out_improvement_claim": false,
+  "metrics": {
+    "total_delay_entity_s": 8616.458264521256,
+    "vehicle_delay_vehicle_s": 8526.797373541276,
+    "pedestrian_delay_person_s": 89.66089097998064,
+    "throughput_entities": 78,
+    "max_wait_s": 100.54021120812374,
+    "pedestrian_max_wait_s": 16.80485240184496,
+    "queue_count_mean": 71.38333333333334,
+    "queue_count_max": 132,
+    "queue_length_mean_m": 54.7025,
+    "queue_length_max_m": 63.0,
+    "fairness_direction_max_gap_s": 36.617928159248315,
+    "safety_intervention_rate": 0.76875,
+    "switch_count": 8.0,
+    "episode_reward": -9154.809553565265
+  },
+  "metrics_units": {
+    "queue_length": "m; maximum ground-truth lane queue extent, upstream excluded",
+    "queue_count": "vehicle; all queued plus upstream",
+    "safety_intervention_rate": "fraction of physics ticks, including clearance locks",
+    "wait": "s; unfinished-trip lower bounds, censoring in fairness"
+  },
+  "run_seed": 903,
+  "variant": "full",
+  "episode": 28
+}

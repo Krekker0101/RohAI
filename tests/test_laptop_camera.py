@@ -39,9 +39,10 @@ def test_camera_interrupt_exits_cleanly_and_releases_resources(
     memory, capture = MagicMock(), MagicMock()
     capture.isOpened.return_value = True
     capture.read.side_effect = KeyboardInterrupt()
-    monkeypatch.setattr(camera.shared_memory, "SharedMemory", lambda **kwargs: memory)
-    monkeypatch.setattr(camera.cv2, "VideoCapture", lambda *args: capture)
-    ready, stop, errors = Event(), Event(), Queue()
+    monkeypatch.setattr(shared_memory, "SharedMemory", lambda **kwargs: memory)
+    monkeypatch.setattr(cv2, "VideoCapture", lambda *args: capture)
+    ready, stop = Event(), Event()
+    errors: Queue[str] = Queue()
     settings = VisionSettings(camera_backend="DSHOW")
     camera._capture_worker(settings.model_dump_json(), "fixture", [], Lock(), ready, stop, errors)
     assert stop.is_set() and ready.is_set()

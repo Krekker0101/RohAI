@@ -104,7 +104,21 @@ class Conditions(Model):
     tilt_degrees: float | None = Field(default=None, ge=0, le=90)
 
 
+class UsageRights(Model):
+    license_id: str = Field(min_length=1, max_length=128)
+    owner: str = Field(min_length=1, max_length=256)
+    source_reference: str = Field(min_length=1, max_length=2048)
+    training_allowed: bool = False
+    redistribution_allowed: bool = False
+    privacy_reviewed: bool = False
+    reviewed_by: str = Field(min_length=1, max_length=256)
+    evidence: str = Field(min_length=1, max_length=2048)
+
+
 class SourceVideo(Model):
+    rights: UsageRights | None = None
+    scene_domain: Literal["UNSPECIFIED", "REAL_ROAD", "PHYSICAL_MAKET", "SYNTHETIC"] = "UNSPECIFIED"
+    media_kind: Literal["video", "image_sequence"] = "video"
     source_id: Identifier
     recording_id: Identifier  # SAME ID for all clips/transcodes of one original recording.
     camera_id: Identifier
@@ -248,7 +262,11 @@ class SequenceSpec(Model):
 
 class SplitDefinition(Model):
     seed: int = 2026
-    group_by: tuple[Literal["recording", "camera", "day"], ...] = ("recording", "camera", "day")
+    group_by: tuple[Literal["recording", "camera", "day", "intersection"], ...] = (
+        "recording",
+        "camera",
+        "day",
+    )
     assignments: dict[str, Split] = Field(
         default_factory=dict
     )  # Source-video IDs, NEVER frame IDs.

@@ -17,12 +17,31 @@ from traffic_vision.evaluation.vision import finish_report
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(prog="rohai", description=__doc__)
     commands = result.add_subparsers(dest="command", required=True)
+    control = commands.add_parser("control", help="Offline Intelligence Engine experiments")
+    control.add_argument("arguments", nargs=argparse.REMAINDER)
     maket = commands.add_parser("maket")
     maket.add_argument("arguments", nargs=argparse.REMAINDER)
     from traffic_vision.training.cli import add_commands
 
     add_commands(commands)
     dataset = commands.add_parser("dataset").add_subparsers(dest="action", required=True)
+    ingest = dataset.add_parser("import")
+    ingest.add_argument("path", type=Path)
+    ingest.add_argument("--destination", type=Path, required=True)
+    proposals = dataset.add_parser("propose")
+    proposals.add_argument("path", type=Path)
+    proposals.add_argument("--destination", type=Path, required=True)
+    labels = dataset.add_parser("labels")
+    labels.add_argument("path", type=Path, help="Native annotation JSON (editable draft)")
+    labels.add_argument("--operation", choices=("review", "yolo", "coco"), required=True)
+    labels.add_argument(
+        "--classes", type=Path, required=True, help="Dataset manifest with class_mapping"
+    )
+    labels.add_argument("--width", type=int, required=True)
+    labels.add_argument("--height", type=int, required=True)
+    labels.add_argument("--reviewer")
+    labels.add_argument("--exhaustive", type=int, nargs="*", default=[])
+    labels.add_argument("--output", type=Path, required=True)
     validate = dataset.add_parser("validate")
     validate.add_argument("path", type=Path)
     validate.add_argument(
@@ -91,6 +110,24 @@ def _protect_output(output: Path | None, release_path: Path) -> None:
 
 
 def execute(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    if args.command == "control":
+        import subprocess
+        import sys
+
+        child = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "traffic_simulator.learning.intelligence_experiment",
+                *args.arguments,
+            ],
+            check=False,
+        )
+        return {
+            "command": "control",
+            "status": "COMPLETED" if child.returncode == 0 else "ERROR",
+            "exit_code": child.returncode,
+        }, child.returncode
     if args.command == "maket":
         from smart_traffic_backend.maket.app import main as maket_main
 
@@ -100,6 +137,43 @@ def execute(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
 
         return lifecycle_execute(args)
     if args.command == "dataset":
+        if args.action == "import":
+            from traffic_vision.dataset.ingest import import_media
+
+            path = import_media(args.path, args.destination)
+            return {"status": "DRAFT_UNVERIFIED", "manifest": str(path)}, 0
+        if args.action == "propose":
+            from traffic_vision.dataset.proposals import propose_annotations
+
+            return propose_annotations(args.path, args.destination), 0
+        if args.action == "labels":
+            from traffic_vision.dataset.labels import export_coco, export_yolo, review
+            from traffic_vision.dataset.schema import FrameAnnotation
+
+            annotation = FrameAnnotation.model_validate_json(args.path.read_text(encoding="utf-8"))
+            classes = DatasetSpec.model_validate_json(
+                args.classes.read_text(encoding="utf-8")
+            ).class_mapping
+            dimensions = {"width": args.width, "height": args.height, "classes": classes}
+            if args.operation == "review":
+                if not args.reviewer:
+                    raise ValueError("Review requires attributed human --reviewer")
+                return review(
+                    annotation,
+                    reviewer=args.reviewer,
+                    exhaustive_classes=tuple(args.exhaustive),
+                    **dimensions,
+                ).model_dump(mode="json"), 0
+            if args.operation == "coco":
+                return export_coco(
+                    annotation, image_id=1, file_name=annotation.frame_id + ".png", **dimensions
+                ), 0
+            return {
+                "format": "YOLO",
+                "text": export_yolo(annotation, **dimensions),
+                "provenance": annotation.provenance,
+                "sidecar": annotation.model_dump(mode="json"),
+            }, 0
         if args.action == "inventory":
             from traffic_vision.dataset.inventory import inventory
 

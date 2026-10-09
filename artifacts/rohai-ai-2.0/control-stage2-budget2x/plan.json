@@ -1,0 +1,4645 @@
+{
+  "experiment_id": "rohai-ai20-control-budget2x-v2",
+  "output": "D:\\PROJECTS\\RohAI\\artifacts\\rohai-ai-2.0\\control-stage2-budget2x",
+  "created_at": "2026-10-09T03:34:30.043255+00:00",
+  "smoke": true,
+  "runner_sha256": "c1238b4a1b7e0b177cb036cd2ee909d44a5cacae1553ec16f57b0859e3b622b9",
+  "intelligence_runner_sha256": "bf5447eadd59c65ac42c3262678b03bb091d91ef359c13e68b86881076be4e26",
+  "code_sha256": "1d4d1a1059e5205c1218ae794a661b058286f137834073384dbe4f12613c02e3",
+  "git_commit": "23c450babbc2d24c9d34a068697219a89fc9f535",
+  "dirty_tree": true,
+  "dependencies": {
+    "torch": "2.14.0",
+    "numpy": "2.5.3",
+    "gymnasium": "1.3.0",
+    "stable-baselines3": "2.9.0",
+    "pydantic": "2.13.5"
+  },
+  "strict_environment": true,
+  "geometry_features": true,
+  "reward": {
+    "version": "rohai-reward-v1",
+    "objective": "Entity delay plus modest throughput, fairness, spillback and switching costs",
+    "approved_for_training": true,
+    "approval_basis": "Authorized synthetic Stage-2 training; weights frozen before TEST",
+    "total_delay": 1.0,
+    "queue_delay": 0.0,
+    "pedestrian_delay": 0.0,
+    "throughput": 2.0,
+    "maximum_wait": 0.01,
+    "fairness": 0.005,
+    "spillback": 2.0,
+    "switching": 1.0
+  },
+  "reward_scale": 0.01,
+  "run_seeds": [
+    901,
+    902,
+    903
+  ],
+  "training_steps": 4800,
+  "device": "cpu",
+  "net_arch": [
+    64,
+    64
+  ],
+  "max_training_seconds": 600,
+  "algorithm": {
+    "learning_rate": 0.0003,
+    "n_steps": 240,
+    "batch_size": 60,
+    "n_epochs": 4,
+    "gamma": 0.995,
+    "gae_lambda": 0.95,
+    "ent_coef": 0.01
+  },
+  "training": [
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TRAINING-balanced-61000",
+      "seed": 61000,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 18.0,
+              "south": 18.0,
+              "east": 18.0,
+              "west": 18.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 1,
+        "lane_length_m": 65.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TRAINING-NS-heavy-61001",
+      "seed": 61001,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 45.0,
+              "south": 40.0,
+              "east": 8.0,
+              "west": 8.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 90.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TRAINING-EW-heavy-61002",
+      "seed": 61002,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 8.0,
+              "south": 8.0,
+              "east": 45.0,
+              "west": 40.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 65.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TRAINING-rapid-demand-change-61003",
+      "seed": 61003,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 60.0,
+            "vehicles_per_minute": {
+              "north": 45.0,
+              "south": 40.0,
+              "east": 8.0,
+              "west": 8.0
+            },
+            "pedestrians_per_minute": 6.0
+          },
+          {
+            "start_s": 60.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 8.0,
+              "south": 8.0,
+              "east": 45.0,
+              "west": 40.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 1,
+        "lane_length_m": 90.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TRAINING-burst-traffic-61004",
+      "seed": 61004,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 24.0,
+              "south": 24.0,
+              "east": 24.0,
+              "west": 24.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 65.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "bursty",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TRAINING-night-degraded-vision-61005",
+      "seed": 61005,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 18.0,
+              "south": 18.0,
+              "east": 18.0,
+              "west": 18.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 90.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.15,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.04,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.4,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.08,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.3,
+        "frame_drop_probability": 0.01,
+        "fps": 2.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TRAINING-partial-camera-failure-61006",
+      "seed": 61006,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 18.0,
+              "south": 18.0,
+              "east": 18.0,
+              "west": 18.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 1,
+        "lane_length_m": 65.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": [
+          {
+            "start_s": 40.0,
+            "end_s": 90.0,
+            "directions": [
+              "north"
+            ],
+            "mode": "outage"
+          }
+        ]
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TRAINING-queue-spillback-61007",
+      "seed": 61007,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 90.0,
+              "south": 90.0,
+              "east": 25.0,
+              "west": 25.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 26.0,
+        "downstream_capacity": 2,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": [
+          {
+            "start_s": 30.0,
+            "end_s": 90.0,
+            "downstream": "south"
+          }
+        ]
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TRAINING-low-61008",
+      "seed": 61008,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 1.0,
+              "south": 1.0,
+              "east": 1.0,
+              "west": 1.0
+            },
+            "pedestrians_per_minute": 1.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 65.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TRAINING-one-long-queue-61009",
+      "seed": 61009,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 65.0,
+              "south": 2.0,
+              "east": 2.0,
+              "west": 2.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 1,
+        "lane_length_m": 90.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TRAINING-morning-peak-61010",
+      "seed": 61010,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 30.0,
+            "vehicles_per_minute": {
+              "north": 8.0,
+              "south": 8.0,
+              "east": 8.0,
+              "west": 8.0
+            },
+            "pedestrians_per_minute": 6.0
+          },
+          {
+            "start_s": 30.0,
+            "end_s": 90.0,
+            "vehicles_per_minute": {
+              "north": 45.0,
+              "south": 40.0,
+              "east": 8.0,
+              "west": 8.0
+            },
+            "pedestrians_per_minute": 6.0
+          },
+          {
+            "start_s": 90.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 8.0,
+              "south": 8.0,
+              "east": 8.0,
+              "west": 8.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 65.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TRAINING-evening-peak-61011",
+      "seed": 61011,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 30.0,
+            "vehicles_per_minute": {
+              "north": 8.0,
+              "south": 8.0,
+              "east": 8.0,
+              "west": 8.0
+            },
+            "pedestrians_per_minute": 6.0
+          },
+          {
+            "start_s": 30.0,
+            "end_s": 90.0,
+            "vehicles_per_minute": {
+              "north": 8.0,
+              "south": 8.0,
+              "east": 45.0,
+              "west": 40.0
+            },
+            "pedestrians_per_minute": 6.0
+          },
+          {
+            "start_s": 90.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 8.0,
+              "south": 8.0,
+              "east": 8.0,
+              "west": 8.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 90.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TRAINING-camera-outage-61012",
+      "seed": 61012,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 18.0,
+              "south": 18.0,
+              "east": 18.0,
+              "west": 18.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 1,
+        "lane_length_m": 65.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": [
+          {
+            "start_s": 40.0,
+            "end_s": 90.0,
+            "directions": [
+              "north",
+              "south",
+              "east",
+              "west"
+            ],
+            "mode": "outage"
+          }
+        ]
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    }
+  ],
+  "validation": [
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "VALIDATION-balanced-72000",
+      "seed": 72000,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 18.0,
+              "south": 18.0,
+              "east": 18.0,
+              "west": 18.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 1,
+        "lane_length_m": 65.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "VALIDATION-NS-heavy-72001",
+      "seed": 72001,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 45.0,
+              "south": 40.0,
+              "east": 8.0,
+              "west": 8.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 90.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "VALIDATION-EW-heavy-72002",
+      "seed": 72002,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 8.0,
+              "south": 8.0,
+              "east": 45.0,
+              "west": 40.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 65.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "VALIDATION-rapid-demand-change-72003",
+      "seed": 72003,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 60.0,
+            "vehicles_per_minute": {
+              "north": 45.0,
+              "south": 40.0,
+              "east": 8.0,
+              "west": 8.0
+            },
+            "pedestrians_per_minute": 6.0
+          },
+          {
+            "start_s": 60.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 8.0,
+              "south": 8.0,
+              "east": 45.0,
+              "west": 40.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 1,
+        "lane_length_m": 90.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "VALIDATION-burst-traffic-72004",
+      "seed": 72004,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 24.0,
+              "south": 24.0,
+              "east": 24.0,
+              "west": 24.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 65.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "bursty",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "VALIDATION-night-degraded-vision-72005",
+      "seed": 72005,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 18.0,
+              "south": 18.0,
+              "east": 18.0,
+              "west": 18.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 90.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.15,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.04,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.4,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.08,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.3,
+        "frame_drop_probability": 0.01,
+        "fps": 2.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "VALIDATION-partial-camera-failure-72006",
+      "seed": 72006,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 18.0,
+              "south": 18.0,
+              "east": 18.0,
+              "west": 18.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 1,
+        "lane_length_m": 65.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": [
+          {
+            "start_s": 40.0,
+            "end_s": 90.0,
+            "directions": [
+              "north"
+            ],
+            "mode": "outage"
+          }
+        ]
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "VALIDATION-queue-spillback-72007",
+      "seed": 72007,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 90.0,
+              "south": 90.0,
+              "east": 25.0,
+              "west": 25.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 26.0,
+        "downstream_capacity": 2,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": [
+          {
+            "start_s": 30.0,
+            "end_s": 90.0,
+            "downstream": "south"
+          }
+        ]
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "VALIDATION-low-72008",
+      "seed": 72008,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 1.0,
+              "south": 1.0,
+              "east": 1.0,
+              "west": 1.0
+            },
+            "pedestrians_per_minute": 1.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 65.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "VALIDATION-one-long-queue-72009",
+      "seed": 72009,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 65.0,
+              "south": 2.0,
+              "east": 2.0,
+              "west": 2.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 1,
+        "lane_length_m": 90.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "VALIDATION-morning-peak-72010",
+      "seed": 72010,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 30.0,
+            "vehicles_per_minute": {
+              "north": 8.0,
+              "south": 8.0,
+              "east": 8.0,
+              "west": 8.0
+            },
+            "pedestrians_per_minute": 6.0
+          },
+          {
+            "start_s": 30.0,
+            "end_s": 90.0,
+            "vehicles_per_minute": {
+              "north": 45.0,
+              "south": 40.0,
+              "east": 8.0,
+              "west": 8.0
+            },
+            "pedestrians_per_minute": 6.0
+          },
+          {
+            "start_s": 90.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 8.0,
+              "south": 8.0,
+              "east": 8.0,
+              "west": 8.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 65.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "VALIDATION-evening-peak-72011",
+      "seed": 72011,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 30.0,
+            "vehicles_per_minute": {
+              "north": 8.0,
+              "south": 8.0,
+              "east": 8.0,
+              "west": 8.0
+            },
+            "pedestrians_per_minute": 6.0
+          },
+          {
+            "start_s": 30.0,
+            "end_s": 90.0,
+            "vehicles_per_minute": {
+              "north": 8.0,
+              "south": 8.0,
+              "east": 45.0,
+              "west": 40.0
+            },
+            "pedestrians_per_minute": 6.0
+          },
+          {
+            "start_s": 90.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 8.0,
+              "south": 8.0,
+              "east": 8.0,
+              "west": 8.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 90.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "VALIDATION-camera-outage-72012",
+      "seed": 72012,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 18.0,
+              "south": 18.0,
+              "east": 18.0,
+              "west": 18.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 1,
+        "lane_length_m": 65.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": [
+          {
+            "start_s": 40.0,
+            "end_s": 90.0,
+            "directions": [
+              "north",
+              "south",
+              "east",
+              "west"
+            ],
+            "mode": "outage"
+          }
+        ]
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    }
+  ],
+  "test": [
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TEST-balanced-83000",
+      "seed": 83000,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 18.0,
+              "south": 18.0,
+              "east": 18.0,
+              "west": 18.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 1,
+        "lane_length_m": 65.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TEST-NS-heavy-83001",
+      "seed": 83001,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 45.0,
+              "south": 40.0,
+              "east": 8.0,
+              "west": 8.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 90.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TEST-EW-heavy-83002",
+      "seed": 83002,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 8.0,
+              "south": 8.0,
+              "east": 45.0,
+              "west": 40.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 65.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TEST-rapid-demand-change-83003",
+      "seed": 83003,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 60.0,
+            "vehicles_per_minute": {
+              "north": 45.0,
+              "south": 40.0,
+              "east": 8.0,
+              "west": 8.0
+            },
+            "pedestrians_per_minute": 6.0
+          },
+          {
+            "start_s": 60.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 8.0,
+              "south": 8.0,
+              "east": 45.0,
+              "west": 40.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 1,
+        "lane_length_m": 90.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TEST-burst-traffic-83004",
+      "seed": 83004,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 24.0,
+              "south": 24.0,
+              "east": 24.0,
+              "west": 24.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 65.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "bursty",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TEST-night-degraded-vision-83005",
+      "seed": 83005,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 18.0,
+              "south": 18.0,
+              "east": 18.0,
+              "west": 18.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 90.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.15,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.04,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.4,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.08,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.3,
+        "frame_drop_probability": 0.01,
+        "fps": 2.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TEST-partial-camera-failure-83006",
+      "seed": 83006,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 18.0,
+              "south": 18.0,
+              "east": 18.0,
+              "west": 18.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 1,
+        "lane_length_m": 65.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": [
+          {
+            "start_s": 40.0,
+            "end_s": 90.0,
+            "directions": [
+              "north"
+            ],
+            "mode": "outage"
+          }
+        ]
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TEST-queue-spillback-83007",
+      "seed": 83007,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 90.0,
+              "south": 90.0,
+              "east": 25.0,
+              "west": 25.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 26.0,
+        "downstream_capacity": 2,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": [
+          {
+            "start_s": 30.0,
+            "end_s": 90.0,
+            "downstream": "south"
+          }
+        ]
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TEST-low-83008",
+      "seed": 83008,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 1.0,
+              "south": 1.0,
+              "east": 1.0,
+              "west": 1.0
+            },
+            "pedestrians_per_minute": 1.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 65.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TEST-one-long-queue-83009",
+      "seed": 83009,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 65.0,
+              "south": 2.0,
+              "east": 2.0,
+              "west": 2.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 1,
+        "lane_length_m": 90.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TEST-morning-peak-83010",
+      "seed": 83010,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 30.0,
+            "vehicles_per_minute": {
+              "north": 8.0,
+              "south": 8.0,
+              "east": 8.0,
+              "west": 8.0
+            },
+            "pedestrians_per_minute": 6.0
+          },
+          {
+            "start_s": 30.0,
+            "end_s": 90.0,
+            "vehicles_per_minute": {
+              "north": 45.0,
+              "south": 40.0,
+              "east": 8.0,
+              "west": 8.0
+            },
+            "pedestrians_per_minute": 6.0
+          },
+          {
+            "start_s": 90.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 8.0,
+              "south": 8.0,
+              "east": 8.0,
+              "west": 8.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 65.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TEST-evening-peak-83011",
+      "seed": 83011,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 30.0,
+            "vehicles_per_minute": {
+              "north": 8.0,
+              "south": 8.0,
+              "east": 8.0,
+              "west": 8.0
+            },
+            "pedestrians_per_minute": 6.0
+          },
+          {
+            "start_s": 30.0,
+            "end_s": 90.0,
+            "vehicles_per_minute": {
+              "north": 8.0,
+              "south": 8.0,
+              "east": 45.0,
+              "west": 40.0
+            },
+            "pedestrians_per_minute": 6.0
+          },
+          {
+            "start_s": 90.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 8.0,
+              "south": 8.0,
+              "east": 8.0,
+              "west": 8.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 2,
+        "lane_length_m": 90.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": []
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    },
+    {
+      "schema_version": "rohai-twin-1",
+      "scenario_id": "TEST-camera-outage-83012",
+      "seed": 83012,
+      "duration_s": 120.0,
+      "step_s": 0.25,
+      "traffic": {
+        "periods": [
+          {
+            "start_s": 0.0,
+            "end_s": 120.0,
+            "vehicles_per_minute": {
+              "north": 18.0,
+              "south": 18.0,
+              "east": 18.0,
+              "west": 18.0
+            },
+            "pedestrians_per_minute": 6.0
+          }
+        ],
+        "lanes_per_approach": 1,
+        "lane_length_m": 65.0,
+        "downstream_capacity": 12,
+        "downstream_travel_s": 5.0,
+        "headway_s": 2.0,
+        "reaction_s": 1.0,
+        "pedestrian_headway_s": 0.5,
+        "crossing_s": 6.0,
+        "turn_probabilities": [
+          0.15,
+          0.7,
+          0.15
+        ],
+        "vehicle_probabilities": [
+          0.7,
+          0.08,
+          0.1,
+          0.07,
+          0.05
+        ],
+        "arrival_distribution": "poisson",
+        "burst_size": 4,
+        "incidents": []
+      },
+      "perception": {
+        "provenance": "engineering_assumption",
+        "benchmark_report_sha256": null,
+        "calibration_notes": "Uncalibrated stress-test parameters; not field estimates",
+        "missed_detection_probability": 0.03,
+        "false_positives_per_frame": 0.01,
+        "id_switch_probability": 0.001,
+        "occlusion_probability": 0.01,
+        "occlusion_duration_s": 0.5,
+        "position_noise_std_m": 0.15,
+        "wait_noise_std_s": 0.1,
+        "queue_undercount_probability": 0.02,
+        "camera_delay_s": 0.05,
+        "inference_latency_s": 0.1,
+        "frame_drop_probability": 0.01,
+        "fps": 4.0,
+        "minimum_fps": 0.8,
+        "stale_after_s": 3.0,
+        "freeze_detection_s": 1.0,
+        "track_ttl_s": 2.0,
+        "camera_availability": 1.0,
+        "calibration_scale_error": 0.01,
+        "faults": [
+          {
+            "start_s": 40.0,
+            "end_s": 90.0,
+            "directions": [
+              "north",
+              "south",
+              "east",
+              "west"
+            ],
+            "mode": "outage"
+          }
+        ]
+      },
+      "randomization": {
+        "enabled": false,
+        "rationale": "Narrow engineering sensitivity ranges; not empirical uncertainty bounds",
+        "arrival_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "headway_multiplier": {
+          "low": 0.95,
+          "high": 1.05
+        },
+        "reaction_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "noise_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "latency_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "occlusion_multiplier": {
+          "low": 0.9,
+          "high": 1.1
+        },
+        "camera_availability": {
+          "low": 0.995,
+          "high": 1.0
+        },
+        "arrival_distributions": [
+          "poisson"
+        ]
+      },
+      "expected_invariants": [
+        "conservation",
+        "finite_storage",
+        "no_conflicting_service",
+        "observed_only_control",
+        "finite_metrics"
+      ]
+    }
+  ],
+  "selection_rule": "Preregistered final checkpoint budget; no adaptive selection",
+  "test_rule": "Frozen final checkpoints; TEST never selects parameters; one report per job",
+  "promotion": false,
+  "allowed_modes": [
+    "SIMULATION",
+    "SHADOW"
+  ],
+  "sha256": "4bc918c2d49c58c4dac1663c463fb7cc72fbb42d1e84ec5d852de7ebe2511c1a"
+}

@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import secrets
+import sqlite3
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from typing import Annotated
@@ -17,9 +18,11 @@ from traffic_vision.geometry import GeometryStore, IntersectionGeometry
 from traffic_vision.models import PipelineStatus, VisionTrafficState
 from traffic_vision.validation import BenchmarkReport, BenchmarkRequest, benchmark
 
+from smart_traffic_backend.ai import AIService, RollbackRequest, ShadowSelection
 from smart_traffic_backend.config import Settings
 from smart_traffic_backend.demo_runtime import DEMO_SOURCE_ID, DemoRuntime
-from smart_traffic_backend.hardware import MockHardwareController
+from smart_traffic_backend.hardware import MockHardwareController, ReplayHardwareAdapter
+from smart_traffic_backend.hardware_service import HardwareApplicationService
 from smart_traffic_backend.runtime import Runtime
 from smart_traffic_backend.safety_architecture import (
     DecisionAudit,
@@ -59,6 +62,8 @@ class SystemInfo(Model):
     yellow_seconds: float
     all_red_seconds: float
     demo: bool = False
+    physical_execution: bool | None = False
+    hardware_mode: str = "mock"
 
 
 def get_runtime(request: Request) -> Runtime | VisionRuntime:
@@ -93,7 +98,20 @@ def create_app(
         logging.basicConfig(
             level=config.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s"
         )
-        adapter = hardware if hardware is not None else MockHardwareController()
+        selected = (
+            hardware
+            if hardware is not None
+            else (
+                ReplayHardwareAdapter()
+                if config.hardware_mode == "replay"
+                else MockHardwareController()
+            )
+        )
+        adapter = (
+            hardware
+            if hardware is not None
+            else HardwareApplicationService(selected, config.timing)
+        )
         runtime = (
             Runtime(config, adapter)
             if config.mode == "simulation"
@@ -103,11 +121,13 @@ def create_app(
         demo_runtime = DemoRuntime(config)
         app.state.runtime = runtime
         app.state.demo_runtime = demo_runtime
+        app.state.ai = AIService(config.ai_artifact_directory, config.timing)
         try:
             await demo_runtime.start()
             await runtime.start()
             yield
         finally:
+            await asyncio.to_thread(app.state.ai.close)
             await runtime.stop()
             await demo_runtime.stop()
 
@@ -126,6 +146,90 @@ def create_app(
     def dashboard_redirect() -> RedirectResponse:
         return RedirectResponse("/dashboard/")
 
+    @app.get("/api/v1/ai", tags=["ai"])
+    async def ai_status(request: Request, runtime: RuntimeDep) -> dict[str, object]:
+        service: AIService = request.app.state.ai
+        data = await asyncio.to_thread(service.snapshot)
+        manifest = (
+            getattr(runtime.pipeline.detector, "manifest", None)
+            if isinstance(runtime, VisionRuntime)
+            else None
+        )
+        data["overview"] = {
+            "vision": (
+                f"{manifest.model_id}@{manifest.model_version}"
+                if manifest is not None
+                else config.vision_model_version
+            ),
+            "baseline": (
+                runtime.engine.controller.policy.value
+                if isinstance(runtime, Runtime)
+                else runtime.engine.policy.policy.value
+            ),
+            "baseline_version": config.controller_policy_version,
+            "source": config.vision.source if isinstance(runtime, VisionRuntime) else "SIMULATION",
+            "runtime_ready": runtime.ready,
+        }
+        return data
+
+    @app.post("/api/v1/ai/shadow", dependencies=[Depends(require_operator)], tags=["ai"])
+    async def ai_shadow(
+        body: ShadowSelection, request: Request, runtime: RuntimeDep
+    ) -> dict[str, object]:
+        if not isinstance(runtime, VisionRuntime) or config.vision.source not in ("file", "camera"):
+            raise HTTPException(
+                status_code=409, detail="Shadow requires recorded video or live camera"
+            )
+        service: AIService = request.app.state.ai
+        async with service.lock:
+            try:
+                await asyncio.to_thread(service.start_shadow, body, config.vision.source)
+                runtime.ai_shadow = service.shadow
+            except (
+                ValueError,
+                OSError,
+                sqlite3.Error,
+                KeyError,
+                PermissionError,
+                TimeoutError,
+            ) as exc:
+                service.error = str(exc)
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {"state": "RUNNING", "physical_execution": False}
+
+    @app.post("/api/v1/ai/shadow/stop", dependencies=[Depends(require_operator)], tags=["ai"])
+    async def ai_shadow_stop(request: Request, runtime: RuntimeDep) -> dict[str, object]:
+        service: AIService = request.app.state.ai
+        async with service.lock:
+            if isinstance(runtime, VisionRuntime):
+                runtime.ai_shadow = None
+            await asyncio.to_thread(service.close)
+        return {"state": "STOPPED", "physical_execution": False}
+
+    @app.post("/api/v1/ai/rollback", dependencies=[Depends(require_operator)], tags=["ai"])
+    async def ai_rollback(
+        body: RollbackRequest, request: Request, runtime: RuntimeDep
+    ) -> dict[str, object]:
+        service: AIService = request.app.state.ai
+        if service.registry is None:
+            raise HTTPException(
+                status_code=503, detail="Registry unavailable; baseline remains active"
+            )
+        async with service.lock:
+            if isinstance(runtime, VisionRuntime):
+                runtime.ai_shadow = None
+            await asyncio.to_thread(service.close)
+            try:
+                selected = await asyncio.to_thread(service.registry.rollback, body.reason)
+            except (ValueError, OSError, sqlite3.Error, PermissionError) as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {
+            "selected": selected,
+            "state": "STOPPED",
+            "restart": "EXPLICIT_SHADOW_START_REQUIRED",
+            "physical_execution": False,
+        }
+
     @app.get("/api/v1/system", response_model=SystemInfo, tags=["system"])
     async def system_info(runtime: RuntimeDep) -> SystemInfo:
         return SystemInfo(
@@ -135,7 +239,9 @@ def create_app(
                 if isinstance(runtime, Runtime)
                 else runtime.engine.policy.policy
             ),
-            hardware=type(runtime.hardware).__name__,
+            hardware=type(getattr(runtime.hardware, "adapter", runtime.hardware)).__name__,
+            hardware_mode=config.hardware_mode if hardware is None else "injected",
+            physical_execution=False if hardware is None else None,
             operator_auth_required=config.operator_token is not None,
             source="simulator" if config.mode == "simulation" else config.vision.source,
             source_id="simulation" if config.mode == "simulation" else config.vision.source_id,
@@ -144,6 +250,16 @@ def create_app(
             all_red_seconds=config.timing.all_red_seconds,
             demo=False,
         )
+
+    @app.get("/api/v1/hardware", tags=["system"])
+    async def hardware_status(runtime: RuntimeDep) -> dict[str, object]:
+        if isinstance(runtime.hardware, HardwareApplicationService):
+            return runtime.hardware.snapshot()
+        return {
+            "state": "UNKNOWN",
+            "confirmation_kind": "injected_adapter",
+            "physical_execution": None,
+        }
 
     def get_demo(request: Request) -> DemoRuntime:
         demo: DemoRuntime = request.app.state.demo_runtime

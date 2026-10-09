@@ -155,7 +155,8 @@ def test_tracking_global_idf1_switch_and_fragmentation() -> None:
     result = tracking_metrics(fragmented, (0, 1))
     assert result["IDF1"] == pytest.approx(0.8)
     assert result["fragmentations"] == result["false_negatives"] == 1
-    assert result["HOTA"] is None
+    assert result["HOTA_status"] == "MEASURED"
+    assert 0 <= result["HOTA"] <= 1
 
 
 def test_sequences_do_not_share_identities() -> None:

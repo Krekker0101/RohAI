@@ -14,6 +14,7 @@ if not exist "recordings\car-detection.mp4" (
   exit /b 2
 )
 set "STA_MODE=vision"
+set "STA_HARDWARE_MODE=mock"
 set "STA_POLICY=adaptive"
 set "STA_TICK_SECONDS=0.1"
 set "STA_VISION__SOURCE=file"
@@ -34,4 +35,5 @@ exit /b 3
 start "" "http://127.0.0.1:8000/dashboard/"
 echo.
 echo Dashboard opened. Click REAL in the top bar for actual Vision telemetry.
+echo Hardware output is explicitly MOCK. Use MAKET for commissioned ESP32 control.
 endlocal

@@ -250,6 +250,37 @@
     "SourceVideo": {
       "additionalProperties": false,
       "properties": {
+        "rights": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UsageRights"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scene_domain": {
+          "default": "UNSPECIFIED",
+          "enum": [
+            "UNSPECIFIED",
+            "REAL_ROAD",
+            "PHYSICAL_MAKET",
+            "SYNTHETIC"
+          ],
+          "title": "Scene Domain",
+          "type": "string"
+        },
+        "media_kind": {
+          "default": "video",
+          "enum": [
+            "video",
+            "image_sequence"
+          ],
+          "title": "Media Kind",
+          "type": "string"
+        },
         "source_id": {
           "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
           "title": "Source Id",
@@ -398,7 +429,8 @@
             "enum": [
               "recording",
               "camera",
-              "day"
+              "day",
+              "intersection"
             ],
             "type": "string"
           },
@@ -426,6 +458,65 @@
         }
       },
       "title": "SplitDefinition",
+      "type": "object"
+    },
+    "UsageRights": {
+      "additionalProperties": false,
+      "properties": {
+        "license_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "License Id",
+          "type": "string"
+        },
+        "owner": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Owner",
+          "type": "string"
+        },
+        "source_reference": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Source Reference",
+          "type": "string"
+        },
+        "training_allowed": {
+          "default": false,
+          "title": "Training Allowed",
+          "type": "boolean"
+        },
+        "redistribution_allowed": {
+          "default": false,
+          "title": "Redistribution Allowed",
+          "type": "boolean"
+        },
+        "privacy_reviewed": {
+          "default": false,
+          "title": "Privacy Reviewed",
+          "type": "boolean"
+        },
+        "reviewed_by": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Reviewed By",
+          "type": "string"
+        },
+        "evidence": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Evidence",
+          "type": "string"
+        }
+      },
+      "required": [
+        "license_id",
+        "owner",
+        "source_reference",
+        "reviewed_by",
+        "evidence"
+      ],
+      "title": "UsageRights",
       "type": "object"
     }
   },

@@ -14,6 +14,7 @@ class Settings(BaseSettings):
         env_prefix="STA_", env_nested_delimiter="__", env_file=".env", extra="forbid"
     )
     mode: Literal["simulation", "vision", "calibration"] = "simulation"
+    hardware_mode: Literal["mock", "replay"] = "mock"
     policy: Policy = Policy.ADAPTIVE
     tick_seconds: float = Field(default=0.5, ge=0.05, le=1, allow_inf_nan=False)
     stale_after_seconds: float = Field(default=3, ge=2, le=30, allow_inf_nan=False)
@@ -23,6 +24,7 @@ class Settings(BaseSettings):
     cors_origins: tuple[str, ...] = ()
     dashboard_directory: Path = Path("apps/dashboard/dist")
     improvement_log_path: Path = Path(".runtime/improvement/decisions.sqlite3")
+    ai_artifact_directory: Path = Path("artifacts/rohai-ai-2.0/stage3")
     vision_model_version: str = "UNVERIFIED_LOCAL_MODEL"
     controller_policy_version: str = "deterministic-baseline-v1"
     timing: Timing = Field(default_factory=Timing)

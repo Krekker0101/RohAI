@@ -29,8 +29,10 @@ import { directionNames, phaseNames, type Direction, type Policy } from './domai
 const Comparison = lazy(() => import('./features/Comparison'));
 const Analytics = lazy(() => import('./features/Analytics'));
 const Calibration = lazy(() => import('./features/Calibration'));
+const Intelligence = lazy(() => import('./features/Intelligence'));
 
 const pages = [
+  { id: 'intelligence', label: 'RohAI AI 2.0', short: 'AI 2.0', icon: Sparkles, title: 'Verified intelligence.', subtitle: 'Training, release validation and observation-only Shadow.' },
   { id: 'overview', label: 'Обзор перекрёстка', short: 'Обзор', icon: LayoutDashboard, title: 'Город в движении.', subtitle: 'Видеть поток. Понимать спрос. Управлять умнее.' },
   { id: 'analytics', label: 'Видеоаналитика', short: 'Аналитика', icon: ScanLine, title: 'Каждый объект на виду.', subtitle: 'Треки, классы транспорта и производительность Vision Engine.' },
   { id: 'comparison', label: 'AI vs Fixed-Time', short: 'Сравнение', icon: GitCompareArrows, title: 'Эффективность, измеренная.', subtitle: 'Проверяйте решения на воспроизводимых сценариях.' },
@@ -177,7 +179,7 @@ export function App() {
         {error ? <div className="error-banner" role="alert">{error}<button onClick={() => setError('')}>Закрыть</button></div> : null}
 
         <Suspense fallback={<div className="empty">Загружаем раздел…</div>}>
-          {page === 'overview' ? <Overview snapshot={snapshot} system={system} safe={safe} history={state.history} events={state.events} onEmergency={() => setDialog('emergency')}/> : page === 'comparison' ? <Comparison/> : page === 'analytics' ? <Analytics snapshot={snapshot}/> : <Calibration system={system}/>} 
+          {page === 'intelligence' ? <Intelligence/> : page === 'overview' ? <Overview snapshot={snapshot} system={system} safe={safe} history={state.history} events={state.events} onEmergency={() => setDialog('emergency')}/> : page === 'comparison' ? <Comparison/> : page === 'analytics' ? <Analytics snapshot={snapshot}/> : <Calibration system={system}/>}
         </Suspense>
         <footer className="page-footer"><span><ShieldCheck size={14}/>Vision наблюдает. Decision решает. Safety разрешает.</span><span>Smart Traffic AI · {isDemo ? 'presentation demo' : 'real backend'}</span></footer>
       </main>

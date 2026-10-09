@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 import cv2
+import numpy as np
 from traffic_core.models import (
     ObservationEvidence,
     ObservationStatus,
@@ -121,9 +122,18 @@ class VisionPipeline:
             key: deque(maxlen=120) for key in ("capture", "inference", "analytics")
         }
         self._stage_latency: dict[str, deque[float]] = {
-            key: deque(maxlen=300) for key in ("inference", "analytics", "camera_to_analytics")
+            key: deque(maxlen=300)
+            for key in (
+                "inference",
+                "analytics",
+                "camera_to_analytics",
+                "jpeg",
+                "camera_to_publish",
+            )
         }
         self._stale_drops = 0
+        self._corrupt_drops = 0
+        self._recoveries = 0
         self._publication_times: deque[float] = deque(maxlen=30)
         self._latency_ms = 0.0
         self.health_monitor = PerceptionHealthMonitor(settings.health)
@@ -178,8 +188,6 @@ class VisionPipeline:
             return dict(self._heartbeat_timestamps)
 
     def performance(self) -> dict[str, object]:
-        import numpy as np
-
         with self._lock:
             now = time.monotonic()
             rates = {}
@@ -194,7 +202,13 @@ class VisionPipeline:
                 else None
                 for key, values in self._stage_latency.items()
             }
-        return {"rates": rates, "latency_ms": latency}
+        return {
+            "rates": rates,
+            "latency_ms": latency,
+            "corrupt_frames": self._corrupt_drops,
+            "camera_recoveries": self._recoveries,
+            "stale_frames": self._stale_drops,
+        }
 
     def observation(self, now: float | None = None) -> AnalysisSnapshot | None:
         """Refresh evidence even when workers no longer produce frames."""
@@ -315,10 +329,47 @@ class VisionPipeline:
             self._connected = True
             start = time.monotonic()
             media_start: float | None = None
+            retries_left = self.settings.reconnect_attempts
             while not self._stop.is_set():
-                frame = self.source.read()
+                try:
+                    frame = self.source.read()
+                except OSError:
+                    if self.settings.source not in ("builtin_camera", "usb_camera"):
+                        raise
+                    self._connected = False
+                    self.source.close()
+                    with self._lock:
+                        self._latest_capture = None
+                        self._latest_analysis = None
+                        self._latest = None
+                        self._state = "starting"
+                    while retries_left > 0:
+                        retries_left -= 1
+                        if self._stop.wait(self.settings.reconnect_delay_seconds):
+                            return
+                        try:
+                            self.source.open()
+                            self._connected = True
+                            self._recoveries += 1
+                            break
+                        except OSError:
+                            self.source.close()
+                    else:
+                        raise OSError("Camera recovery attempts exhausted") from None
+                    continue
                 if frame is None:
                     break
+                if (
+                    not isinstance(frame.frame, np.ndarray)
+                    or frame.frame.dtype != np.uint8
+                    or frame.frame.ndim != 3
+                    or frame.frame.shape[2] != 3
+                    or not frame.frame.size
+                ):
+                    with self._lock:
+                        self._corrupt_drops += 1
+                    continue
+                retries_left = self.settings.reconnect_attempts
                 if media_start is None:
                     media_start = frame.timestamp
                 if self.source.paced and self._stop.wait(
@@ -348,6 +399,8 @@ class VisionPipeline:
                 ):
                     break
                 frame = self._capture.take()
+                if frame.stream_epoch != getattr(self.source, "stream_epoch", frame.stream_epoch):
+                    continue
                 if time.monotonic() - frame.captured_at > self.settings.max_frame_age_seconds:
                     with self._lock:
                         self._stale_drops += 1
@@ -374,6 +427,12 @@ class VisionPipeline:
             while not self._stop.is_set():
                 result = self._inferred.take()
                 frame = result.video
+                if frame.stream_epoch != getattr(self.source, "stream_epoch", frame.stream_epoch):
+                    continue
+                if time.monotonic() - frame.captured_at > self.settings.max_frame_age_seconds:
+                    with self._lock:
+                        self._stale_drops += 1
+                    continue
                 height, width = frame.frame.shape[:2]
                 stage_started = time.monotonic()
                 analysis = self.analyzer.process(
@@ -415,15 +474,25 @@ class VisionPipeline:
                 result = self._analyzed.take()
                 with self._lock:
                     self._latency_ms = (time.monotonic() - result.video.captured_at) * 1000
-                image: Image = self.overlay.render(
-                    result.video.frame, result.analysis, self.signal_provider(), self.status()
+                image: Image = (
+                    self.overlay.render(
+                        result.video.frame, result.analysis, self.signal_provider(), self.status()
+                    )
+                    if self.settings.debug_overlay
+                    else result.video.frame
                 )
+                encode_started = time.monotonic()
                 ok, encoded = cv2.imencode(
                     ".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, self.settings.jpeg_quality]
                 )
                 if not ok:
                     raise RuntimeError("JPEG encoding failed")
                 now = time.monotonic()
+                with self._lock:
+                    self._stage_latency["jpeg"].append((now - encode_started) * 1000)
+                    self._stage_latency["camera_to_publish"].append(
+                        (now - result.video.captured_at) * 1000
+                    )
                 if self._stop.is_set():
                     break
                 published = PublishedFrame(
@@ -457,7 +526,11 @@ class VisionPipeline:
         if last is None:
             return
         status = self.status().model_copy(update={"state": "stopped"})
-        image = self.overlay.render(last.raw_frame, last.analysis, signals, status)
+        image = (
+            self.overlay.render(last.raw_frame, last.analysis, signals, status)
+            if self.settings.debug_overlay
+            else last.raw_frame
+        )
         ok, encoded = cv2.imencode(
             ".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, self.settings.jpeg_quality]
         )

@@ -9,6 +9,7 @@ import json
 import os
 import pickle
 import random
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
@@ -35,6 +36,24 @@ from traffic_simulator.twin_models import PerceptionProfile, ScenarioDefinition
 
 VARIANTS = ("full", "no_confidence", "no_arrivals", "no_history", "clean_training")
 Array = NDArray[np.float32]
+
+
+def geometry_history(history: Array, scenario: ScenarioDefinition, enabled: bool) -> Array:
+    if not enabled:
+        return history
+    geometry = scenario.traffic
+    extra = np.tile(
+        np.asarray(
+            [
+                geometry.lanes_per_approach / 8,
+                geometry.lane_length_m / 1000,
+                geometry.headway_s / 10,
+            ],
+            dtype=np.float32,
+        ),
+        (len(history), 1),
+    )
+    return np.concatenate((history, extra), axis=1)
 
 
 def read(path: Path) -> Any:
@@ -149,6 +168,13 @@ class TrainingEnvironment(gym.Env[Array, int]):
         )
         self.collector = MetricCollector()
 
+        if plan.get("geometry_features", False):
+            shape = self.env.observation_space.shape
+            assert shape is not None
+            self.observation_space = gym.spaces.Box(
+                0, 1, shape=(shape[0], shape[1] + 3), dtype=np.float32
+            )
+
     def reset(
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
     ) -> tuple[Array, dict[str, Any]]:
@@ -172,7 +198,9 @@ class TrainingEnvironment(gym.Env[Array, int]):
         )
         self.collector = MetricCollector()
         obs, info = self.env.reset(seed=seed)
-        return transform(obs, self.variant), info
+        return geometry_history(
+            transform(obs, self.variant), scenario, self.plan.get("geometry_features", False)
+        ), info
 
     def step(self, action: int) -> tuple[Array, float, bool, bool, dict[str, Any]]:
         obs, reward, terminated, truncated, info = self.env.step(action)
@@ -201,7 +229,11 @@ class TrainingEnvironment(gym.Env[Array, int]):
                 },
             }
         return (
-            transform(obs, self.variant),
+            geometry_history(
+                transform(obs, self.variant),
+                self.env.scenario,
+                self.plan.get("geometry_features", False),
+            ),
             reward * self.plan["reward_scale"],
             terminated,
             truncated,
@@ -223,6 +255,11 @@ def verify_plan(plan: dict[str, Any]) -> None:
         raise ValueError("Experiment plan hash mismatch")
     if code_fingerprint() != plan["code_sha256"]:
         raise ValueError("Code differs from preregistered experiment")
+    if plan.get("strict_environment", False) and any(
+        __import__("importlib.metadata", fromlist=["version"]).version(name) != version
+        for name, version in plan["dependencies"].items()
+    ):
+        raise ValueError("Dependency versions differ from frozen experiment")
     if file_hash(Path("scripts/training/control_experiment.py")) != plan["runner_sha256"]:
         raise ValueError("Runner differs from preregistration")
     reward = RewardSpecification.model_validate(plan["reward"])
@@ -234,6 +271,8 @@ def train_run(plan_path: str, seed: int, variant: str, target_steps: int | None 
     configure_cpu()
     plan = read(Path(plan_path))
     verify_plan(plan)
+    if str(plan.get("device", "cpu")).startswith("cuda") and not torch.cuda.is_available():
+        raise ValueError("Requested CUDA device unavailable; no silent CPU substitution")
     if variant not in VARIANTS or seed not in plan["run_seeds"]:
         raise ValueError("Unregistered run")
     directory = Path(plan["output"]) / "runs" / f"{variant}-{seed}"
@@ -275,25 +314,30 @@ def train_run(plan_path: str, seed: int, variant: str, target_steps: int | None 
             or file_hash(rng_path) != previous["rng_sha256"]
         ):
             raise ValueError("Corrupt checkpoint or RNG state")
-        model = PPO.load(zip_path, env=env, device="cpu")
+        model = PPO.load(zip_path, env=env, device=plan.get("device", "cpu"))
         with rng_path.open("rb") as stream:
             state = pickle.load(stream)  # local hash-verified runner output only
         random.setstate(state["python"])
         np.random.set_state(state["numpy"])
         torch.set_rng_state(state["torch"])
+        if state.get("cuda") is not None:
+            torch.cuda.set_rng_state_all(state["cuda"])
     else:
         model = PPO(
             "MlpPolicy",
             env,
             seed=seed,
-            device="cpu",
+            device=plan.get("device", "cpu"),
             verbose=0,
-            policy_kwargs={"net_arch": [32, 32]},
+            policy_kwargs={"net_arch": plan.get("net_arch", [32, 32])},
             **plan["algorithm"],
         )
     model.set_logger(configure(str(directory / f"optimizer-{model.num_timesteps}"), ["csv"]))
+    started = time.monotonic()
     try:
         while model.num_timesteps < target:
+            if time.monotonic() - started > plan.get("max_training_seconds", 1e9):
+                break  # Preserve last complete checkpoint; never label partial work completed.
             model.learn(total_timesteps=chunk, reset_num_timesteps=False)
             steps = model.num_timesteps
             if steps % round(env.env.scenario.duration_s):
@@ -307,6 +351,9 @@ def train_run(plan_path: str, seed: int, variant: str, target_steps: int | None 
                         "python": random.getstate(),
                         "numpy": np.random.get_state(),
                         "torch": torch.get_rng_state(),
+                        "cuda": torch.cuda.get_rng_state_all()
+                        if torch.cuda.is_available()
+                        else None,
                     },
                     stream,
                 )
@@ -331,6 +378,7 @@ def train_run(plan_path: str, seed: int, variant: str, target_steps: int | None 
                     "reward": plan["reward"],
                     "algorithm": plan["algorithm"],
                     "dependencies": plan["dependencies"],
+                    "device": str(model.device),
                     "resume_mode": "episode-and-rollout-boundary",
                 },
             )

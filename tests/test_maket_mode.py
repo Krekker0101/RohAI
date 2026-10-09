@@ -35,6 +35,7 @@ def config() -> MaketConfig:
             "output_mode": "PHYSICAL_OUTPUT",
             "camera_selected": True,
             "camera": c.camera.model_copy(update={"source": "webcam"}),
+            "hardware": c.hardware.model_copy(update={"independent_protection_verified": True}),
         }
     )
 
@@ -186,6 +187,7 @@ class WireFixture:
         phase = p["phase"]
         a = {
             "protocol": 1,
+            "firmware_version": "1.0.1",
             "boot": 123,
             "session": p["session"],
             "command_id": p["command_id"],
@@ -199,7 +201,7 @@ class WireFixture:
             "actual_phase": phase,
             "output_mask": MASKS[phase],
             "sense_mask": MASKS[phase],
-            "watchdog": "LATCHED" if p["kind"] == "HELLO" else "OK",
+            "watchdog": "LATCHED" if p["kind"] in {"HELLO", "ESTOP"} else "OK",
             "sense_fault": False,
             "estop": False,
             "min_green_ms": 8000,
@@ -412,7 +414,9 @@ def test_authenticated_api_fails_closed_on_missing_camera_model_calibration(
         snapshot = client.get("/api/maket/state").json()
         assert snapshot["traffic"] is None
         assert snapshot["physical_lamp_optical_confirmation"] is False
-        response = client.post("/api/maket/control", json={"action": "start"})
+        response = client.post(
+            "/api/maket/control", json={"action": "start", "confirm_physical": True}
+        )
         assert response.status_code == 409 and "Preflight failed" in response.text
         assert all(p["kind"] != "SIGNAL" for p in wire.commands)
         assert (

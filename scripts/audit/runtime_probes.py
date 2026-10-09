@@ -7,6 +7,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from numpy.typing import NDArray
 from smart_traffic_backend.config import Settings
 from smart_traffic_backend.hardware import MockHardwareController
 from smart_traffic_backend.runtime import Runtime
@@ -54,6 +55,7 @@ def main() -> None:
     load_s = time.perf_counter() - start
     records = []
     capture = cv2.VideoCapture("recordings/car-detection.mp4")
+    image: NDArray[np.uint8]
     try:
         for index in range(18):
             if index < 3:
@@ -61,9 +63,10 @@ def main() -> None:
             elif index < 6:
                 image, condition = np.full((720, 1280, 3), 3, dtype=np.uint8), "night-flat"
             else:
-                ok, image = capture.read()
+                ok, captured_image = capture.read()
                 if not ok:
                     break
+                image = np.asarray(captured_image, dtype=np.uint8)
                 condition = "unlabelled-demo-replay"
             start = time.perf_counter()
             detections = detector.process(

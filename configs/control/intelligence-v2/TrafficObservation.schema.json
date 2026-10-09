@@ -1,0 +1,119 @@
+{
+  "$defs": {
+    "ControlGeometry": {
+      "additionalProperties": false,
+      "properties": {
+        "lanes_per_approach": {
+          "default": 2,
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Lanes Per Approach",
+          "type": "integer"
+        },
+        "lane_length_m": {
+          "default": 90,
+          "exclusiveMinimum": 0,
+          "maximum": 1000,
+          "title": "Lane Length M",
+          "type": "number"
+        },
+        "headway_s": {
+          "default": 2,
+          "maximum": 10,
+          "minimum": 0.5,
+          "title": "Headway S",
+          "type": "number"
+        }
+      },
+      "title": "ControlGeometry",
+      "type": "object"
+    },
+    "Direction": {
+      "enum": [
+        "north",
+        "south",
+        "east",
+        "west"
+      ],
+      "title": "Direction",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "rohai-observation-v1",
+      "default": "rohai-observation-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "timestamp_s": {
+      "minimum": 0,
+      "title": "Timestamp S",
+      "type": "number"
+    },
+    "values": {
+      "items": {
+        "type": "number"
+      },
+      "title": "Values",
+      "type": "array"
+    },
+    "valid": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Valid",
+      "type": "array"
+    },
+    "clipped": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Clipped",
+      "type": "array"
+    },
+    "geometry": {
+      "$ref": "#/$defs/ControlGeometry"
+    },
+    "downstream_queue_counts": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/Direction"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Downstream Queue Counts"
+    },
+    "downstream_captured_at_s": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Downstream Captured At S"
+    }
+  },
+  "required": [
+    "timestamp_s",
+    "values",
+    "valid",
+    "clipped"
+  ],
+  "title": "TrafficObservation",
+  "type": "object"
+}

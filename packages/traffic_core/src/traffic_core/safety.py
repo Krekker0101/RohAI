@@ -3,6 +3,18 @@ import math
 from traffic_core.models import Decision, Phase, SignalStage, SignalState, TrafficState
 from traffic_core.settings import Timing
 
+# Stand signal groups. Opposite approaches share a phase; all other groups conflict.
+CONFLICT_MATRIX = {
+    Phase.NS: frozenset({Phase.EW, Phase.PEDESTRIAN}),
+    Phase.EW: frozenset({Phase.NS, Phase.PEDESTRIAN}),
+    Phase.PEDESTRIAN: frozenset({Phase.NS, Phase.EW}),
+}
+
+
+def validate_active_groups(groups: set[Phase]) -> None:
+    if any(CONFLICT_MATRIX[group] & groups for group in groups):
+        raise ValueError("Conflicting signal groups")
+
 
 class SafetyController:
     """Only this state machine issues signal states. At most one transition per tick.

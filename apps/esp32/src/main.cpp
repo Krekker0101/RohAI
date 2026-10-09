@@ -14,6 +14,7 @@ bool latched=true, senseFault=false;
 std::atomic<bool> guardReady{false}, mainWatchdogReady{false};
 bool watchdogConfigured=false;
 String session;
+String lastCanonical;
 uint16_t outputMask=ALL_RED_MASK, sensedMask=0;
 
 uint32_t crc32(const String& value) {
@@ -80,6 +81,7 @@ void guardTask(void*) {
 void reply(JsonDocument& request,bool accepted,const char* reason) {
   StaticJsonDocument<1024> doc;
   doc["protocol"]=1;doc["boot"]=bootId;doc["session"]=request["session"];
+  doc["firmware_version"]=FIRMWARE_VERSION;
   doc["command_id"]=request["command_id"];doc["sequence"]=request["sequence"];
   doc["accepted"]=accepted;doc["reason"]=reason;doc["uptime_ms"]=millis();
   doc["device_id"]=DEVICE_ID;doc["domain"]="PHYSICAL_MAKET";
@@ -106,13 +108,21 @@ void process(const String& line) {
   String s=d["session"].as<String>(),kind=d["kind"].as<String>();
   uint32_t seq=d["sequence"],ttl=d["ttl_ms"],deadline=d["deadline_ms"],now=millis();
   if(s.length()!=32||d["command_id"].as<String>().length()!=32){reply(d,false,"IDENTITY");return;}
+  // Autosetup inspection must not establish authority, change outputs or renew a lease.
+  if(kind=="IDENTIFY") {reply(d,true,"IDENTITY_READ_ONLY");return;}
   if(kind=="HELLO") {
-    portENTER_CRITICAL(&mux);stopStand(now);session=s;sequence=seq;portEXIT_CRITICAL(&mux);
+    portENTER_CRITICAL(&mux);stopStand(now);session=s;sequence=seq;lastCanonical="";portEXIT_CRITICAL(&mux);
     reply(d,true,"HELLO_REARM_REQUIRED");return;
   }
-  if(d["boot"].as<uint32_t>()!=bootId||s!=session||seq<=sequence){reply(d,false,"BOOT_SESSION_REPLAY");return;}
+  if(d["boot"].as<uint32_t>()!=bootId||s!=session||seq<sequence){reply(d,false,"BOOT_SESSION_REPLAY");return;}
   int32_t remaining=deadline-now;
   if(ttl<500||ttl>2000||remaining<=0||remaining>(int32_t)ttl+100){reply(d,false,"EXPIRED_TTL");return;}
+  if(seq==sequence) {
+    // Report current readback; never execute again or extend the original lease.
+    if(canonical==lastCanonical&&(kind=="SIGNAL"||kind=="STATUS"))reply(d,true,"DUPLICATE_NO_LEASE_RENEWAL");
+    else reply(d,false,"BOOT_SESSION_REPLAY");
+    return;
+  }
   bool accepted=false;const char* reason="INVALID_COMMAND";
   portENTER_CRITICAL(&mux);
   // Check local lease again inside lock; an expired device cannot be renewed remotely.
@@ -132,6 +142,7 @@ void process(const String& line) {
   } else if(latched)reason="LATCHED_OPERATOR_REARM_REQUIRED";
   if(accepted)sequence=seq;
   portEXIT_CRITICAL(&mux);
+  if(accepted)lastCanonical=canonical;
   // Let electrical sensing settle before acknowledging; guard task owns sense sampling.
   vTaskDelay(pdMS_TO_TICKS(10));reply(d,accepted,reason);
 }

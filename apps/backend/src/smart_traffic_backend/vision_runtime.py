@@ -38,6 +38,7 @@ from smart_traffic_backend.safety_architecture import (
 )
 
 if TYPE_CHECKING:
+    from traffic_simulator.learning.shadow import ShadowIntelligence
     from traffic_vision.pipeline import VisionPipeline
 
 logger = logging.getLogger(__name__)
@@ -117,6 +118,7 @@ class VisionRuntime:
         self.hardware_state = HardwareStateStages()
         self.health = OperationalHealth()
         self.latest = self._snapshot()
+        self.ai_shadow: ShadowIntelligence | None = None
 
     @property
     def ready(self) -> bool:
@@ -470,6 +472,10 @@ class VisionRuntime:
                 core_state = self.pipeline.analyzer.to_core_state(measurement)
                 self._record_policy_outcome(core_state)
                 self.engine.advance(core_state, now)
+                if self.ai_shadow is not None:
+                    self.ai_shadow.submit(
+                        core_state.model_copy(update={"simulation_time": now}), self.engine.safety
+                    )
                 if self.engine.safety.faulted:
                     self.recovery.fault("perception_fault_latched")
                 requested = SignalState(

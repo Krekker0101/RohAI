@@ -304,6 +304,7 @@ def test_stale_observation_cancels_blocked_capture_and_latches_all_red() -> None
 
 def test_overlay_failure_does_not_stop_analysis(monkeypatch: pytest.MonkeyPatch) -> None:
     pipeline = make_pipeline(SyntheticSource(frames=25, fps=10), SyntheticDetector())
+    pipeline.settings = pipeline.settings.model_copy(update={"debug_overlay": True})
 
     def broken(*args: object, **kwargs: object) -> None:
         raise RuntimeError("preview deliberately unavailable")

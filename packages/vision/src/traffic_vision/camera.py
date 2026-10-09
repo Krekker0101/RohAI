@@ -98,10 +98,11 @@ def _capture_worker(
             return
         capture.set(cv2.CAP_PROP_FRAME_WIDTH, settings.camera_width)
         capture.set(cv2.CAP_PROP_FRAME_HEIGHT, settings.camera_height)
+        capture.set(cv2.CAP_PROP_FPS, settings.camera_fps)
         capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         while not stop.is_set():
             ok, image = capture.read()
-            if not ok:
+            if not ok or image is None or image.ndim != 3 or image.shape[2] != 3 or not image.size:
                 errors.put_nowait("FRAME_TIMEOUT")
                 return
             stamp = time.monotonic_ns()
@@ -148,6 +149,7 @@ class LocalCameraSource(VideoSource):
         self._sequence = 0
         self.dropped_frames = 0
         self._started = 0.0
+        self.stream_epoch = -1
 
     def _fail(self, default: str) -> None:
         from queue import Empty
@@ -160,8 +162,21 @@ class LocalCameraSource(VideoSource):
         raise OSError(self.failure_code)
 
     def open(self) -> None:
+        if self._process is not None:
+            raise RuntimeError("Camera capture already open")
         if self.backend == "AUTO":
             raise ValueError("Local camera backend must be selected by bounded discovery")
+        # Recreate primitives after termination: a dead driver can leave an acquired lock.
+        self._errors.close()
+        self._errors.join_thread()
+        self._header = self._context.Array("q", 4, lock=False)
+        self._lock = self._context.Lock()
+        self._ready = self._context.Event()
+        self._stop = self._context.Event()
+        self._errors = self._context.Queue(maxsize=1)
+        self._sequence = 0
+        self.failure_code = None
+        self.stream_epoch += 1
         self._memory = shared_memory.SharedMemory(create=True, size=MAX_BYTES)
         self._process = self._context.Process(
             target=_capture_worker,
@@ -179,7 +194,14 @@ class LocalCameraSource(VideoSource):
         self._started = time.monotonic()
         try:
             self._process.start()
-            if not self._ready.wait(5) or self._header[0] == 0:
+            deadline = time.monotonic() + 5
+            while not self._ready.is_set() and not self.cancelled.is_set():
+                if time.monotonic() >= deadline:
+                    break
+                self._ready.wait(0.05)
+            if self.cancelled.is_set():
+                self._fail("CAMERA_CAPTURE_INTERRUPTED")
+            if not self._ready.is_set() or self._header[0] == 0:
                 self._fail("FRAME_TIMEOUT")
             self.connected = True
         except Exception:
@@ -202,7 +224,12 @@ class LocalCameraSource(VideoSource):
                 self._sequence = sequence
                 captured = stamp / 1e9
                 return VideoFrame(
-                    image, captured - self._started, sequence, self.source_id, captured
+                    image,
+                    captured - self._started,
+                    sequence,
+                    self.source_id,
+                    captured,
+                    self.stream_epoch,
                 )
             if time.monotonic() >= deadline or not self._process.is_alive():
                 self._fail("FRAME_TIMEOUT")
@@ -212,11 +239,12 @@ class LocalCameraSource(VideoSource):
     def close(self) -> None:
         self.connected = False
         self._stop.set()
-        if self._process is not None and self._process.pid is not None:
-            self._process.join(timeout=0.3)
-            if self._process.is_alive():
-                self._process.terminate()
-                self._process.join(timeout=1)
+        if self._process is not None:
+            if self._process.pid is not None:
+                self._process.join(timeout=0.3)
+                if self._process.is_alive():
+                    self._process.terminate()
+                    self._process.join(timeout=1)
             self._process.close()
             self._process = None
         if self._memory is not None:
@@ -224,3 +252,4 @@ class LocalCameraSource(VideoSource):
             self._memory.unlink()
             self._memory = None
         self._errors.close()
+        self._errors.join_thread()

@@ -56,6 +56,7 @@ class MaketScaleConfig(Model):
 
 
 class MaketCalibration(Model):
+    camera_signature: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     intersection_id: str = Field(min_length=1)
     version: int = Field(ge=1)
     created_at: datetime
@@ -84,12 +85,13 @@ class SerialSettings(Model):
     ttl_ms: int = Field(default=1200, ge=500, le=2000)
     device_id: str = "rohai-maket-1"
     safe_mode: Literal["MAKET_ALL_RED"] = "MAKET_ALL_RED"
+    independent_protection_verified: bool = False
 
 
 class MaketConfig(Model):
     output_mode: Literal["CAMERA_ONLY", "PHYSICAL_OUTPUT"] = "CAMERA_ONLY"
     camera_selected: bool = True
-    performance_preset: Literal["LOW", "BALANCED", "HIGH"] = "BALANCED"
+    performance_preset: Literal["LOW", "BALANCED", "HIGH", "CUSTOM"] = "BALANCED"
     vision_profile: Literal["COCO_BASELINE", "MAKET_MODEL"] = "MAKET_MODEL"
     mode: Literal[RuntimeMode.PHYSICAL_MAKET] = RuntimeMode.PHYSICAL_MAKET
     camera: VisionSettings
@@ -108,6 +110,7 @@ class MaketConfig(Model):
     max_recording_seconds: int = Field(default=1800, ge=1, le=7200)
     max_session_bytes: int = Field(default=536870912, ge=1048576)
     max_sessions: int = Field(default=20, ge=1, le=100)
+    retention_days: int = Field(default=7, ge=1, le=365)
 
     @model_validator(mode="after")
     def domain(self) -> "MaketConfig":
@@ -148,6 +151,8 @@ class MaketConfig(Model):
         return cls.model_validate_json(path.read_text(encoding="utf-8"))
 
     def with_preset(self) -> "MaketConfig":
+        if self.performance_preset == "CUSTOM":
+            return self
         width, height, hz = {
             "LOW": (640, 480, 5),
             "BALANCED": (1280, 720, 10),

@@ -2,14 +2,15 @@
 
 import time
 from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
 import pytest
 from smart_traffic_backend.maket.runtime import MaketRuntime
 
 
-def runtime():
-    r = object.__new__(MaketRuntime)
+def runtime() -> Any:
+    r: Any = object.__new__(MaketRuntime)
     geometry = SimpleNamespace(source_id="live", reference_width=1280, reference_height=720)
     geometry.model_dump = lambda **kwargs: {"source_id": geometry.source_id}
     r.calibration = SimpleNamespace(camera_pose_verified=True, geometry=geometry)
@@ -29,7 +30,7 @@ def runtime():
 @pytest.mark.parametrize(
     "reason", ["missing", "camera", "resolution", "pose", "moved", "stale", "incomplete"]
 )
-def test_unverified_runtime_never_exports_geometry(reason):
+def test_unverified_runtime_never_exports_geometry(reason: str) -> None:
     r = runtime()
     if reason == "missing":
         r.calibration = None  # Analyzer template is deliberately irrelevant.
@@ -51,7 +52,7 @@ def test_unverified_runtime_never_exports_geometry(reason):
     )
 
 
-def test_verified_runtime_exports_only_saved_geometry():
+def test_verified_runtime_exports_only_saved_geometry() -> None:
     r = runtime()
     assert r.overlay_calibration() == {
         "state": "CALIBRATED",

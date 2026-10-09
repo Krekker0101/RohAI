@@ -17,6 +17,7 @@ async function fixture(page:Page, cameraCount=1){
     const request=route.request(),path=new URL(request.url()).pathname;
     if(path==='/maket'||path==='/maket/engineer')return route.fulfill({contentType:'text/html',body:readFileSync(resolve(root,'apps/maket-ui',path.endsWith('engineer')?'index.html':'simple.html'))});
     if(path.startsWith('/maket-assets/'))return route.fulfill({contentType:path.endsWith('.js')?'text/javascript':'text/css',body:readFileSync(resolve(root,'apps/maket-ui',path.split('/').at(-1)!))});
+    if(path.endsWith('/permissions'))return route.fulfill({json:{setup_authorized:true}});
     if(path.endsWith('/session'))return route.fulfill({status:204});
     expect(request.headers()['x-operator-token']??'').toBe('');
     if(path.endsWith('/frame'))return route.fulfill({contentType:'image/jpeg',body:readFileSync(resolve(root,'artifacts/maket-validation/simple-fixture.jpg'))});
@@ -79,7 +80,7 @@ test('First run and second run use automatic session, camera and one shadow Star
   await page.locator('#presentation').click();
   await expect(page.locator('body')).toHaveClass(/present/);
   await expect(page.locator('#wizard')).toBeHidden();
-  await expect(page.locator('nav a')).toBeHidden();
+  await expect(page.locator('a[href="/maket/engineer"]')).toBeHidden();
   await page.screenshot({path:resolve(evidence,'presentation-1920.png'),fullPage:true});
   await page.locator('#presentation').click();
   await page.locator('#main-action').click();
@@ -90,7 +91,7 @@ test('First run and second run use automatic session, camera and one shadow Star
   await expect(page.locator('#wizard')).toBeHidden();
   expect(f.calls).toHaveLength(count); // No auto control or recalibration on second run.
   await page.locator('#main-action').click();
-  expect(f.calls.at(-1)).toEqual({action:'camera_only_start'});
+  await expect.poll(() => f.calls.at(-1)).toEqual({action:'camera_only_start'});
   expect(await page.evaluate(()=>Object.keys(localStorage))).not.toContain('token');
 });
 
@@ -123,6 +124,10 @@ test('No camera and moved camera do not enable Start or physical outputs',async(
   f.state.camera_revalidation_required=true;f.state.calibration_status='SUSPECT_SHIFT';
   await expect(page.locator('#ready')).toContainText('Положение камеры');
   await expect(page.locator('#calibration-open')).toBeVisible();
+  await expect(page.locator('#main-action')).toBeDisabled();
+  f.state.camera_revalidation_required=false;f.state.calibration_status='VALID';
+  f.state.output_mode='PHYSICAL_OUTPUT';f.state.readiness.CONTROL_READY=true;f.state.readiness.VISION_READY=true;
+  await expect(page.locator('#ready')).toContainText('аппаратные проверки не пройдены');
   await expect(page.locator('#main-action')).toBeDisabled();
   expect(f.calls).toHaveLength(0);
 });

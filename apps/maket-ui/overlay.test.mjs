@@ -2,8 +2,16 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const source=readFileSync(new URL('./overlay.js',import.meta.url),'utf8');
-const {overlayState,liveGeometry,realTracks}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+const {overlayState,liveGeometry,realTracks,frameTracks}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 const valid=()=>({camera_connection:'CONNECTED',calibration_status:'VALID',preflight:{calibration_valid:true,calibration_complete:true},overlay_calibration:{state:'CALIBRATED',source_id:'live',geometry:{source_id:'live',reference_width:1280,reference_height:720}}});
+test('tracks require the exact analyzed frame and current epoch',()=>{
+ const track={bbox:{x1:1,y1:1,x2:5,y2:5},visible:true};
+ const s={camera_connection:'CONNECTED',tracks:[track],vision_state:{fresh:true,frame_id:7,stream_epoch:2,frame_width:640,frame_height:480}};
+ const f={id:7,epoch:2,width:640,height:480};
+ assert.deepEqual(frameTracks(s,f),[track]);
+ for(const change of [{id:8},{epoch:1},{width:1280}])assert.deepEqual(frameTracks(s,{...f,...change}),[]);
+ assert.deepEqual(frameTracks({...s,vision_state:{...s.vision_state,fresh:false}},f),[]);
+});
 test('no calibration and template config never supply active geometry',()=>{
   assert.equal(liveGeometry({},1280,720),null);
   assert.equal(liveGeometry({geometry:valid().overlay_calibration.geometry},1280,720),null);

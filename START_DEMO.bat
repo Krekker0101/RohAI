@@ -9,6 +9,7 @@ if errorlevel 1 (
   exit /b 1
 )
 set "STA_MODE=simulation"
+set "STA_HARDWARE_MODE=mock"
 set "STA_POLICY=adaptive"
 set "STA_TICK_SECONDS=0.25"
 start "Smart Traffic AI Backend" cmd /k "uv run uvicorn smart_traffic_backend.main:app --host 127.0.0.1 --port 8000 --workers 1"

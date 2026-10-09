@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import cv2
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, Response, StreamingResponse
 
 
@@ -25,6 +25,18 @@ def replay_app(session: Path) -> FastAPI:
                 yield from stream
 
         return StreamingResponse(lines(), media_type="application/x-ndjson")
+
+    @app.get("/timeline")
+    async def recorded_timeline(
+        offset: int = Query(default=0, ge=0, le=1_000_000),
+        limit: int = Query(default=200, ge=1, le=500),
+    ) -> dict[str, object]:
+        from smart_traffic_backend.maket.history import timeline
+
+        try:
+            return await asyncio.to_thread(timeline, session.parent, session.name, offset, limit)
+        except (OSError, ValueError) as error:
+            raise HTTPException(422, str(error)) from error
 
     @app.get("/frame/{index}")
     async def frame(index: int) -> Response:

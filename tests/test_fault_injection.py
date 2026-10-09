@@ -239,7 +239,7 @@ def test_host_rejects_ack_that_does_not_identify_the_outstanding_command() -> No
         hardware = ProtocolHardwareController(transport, requirements(), INSTANCE, KEY)
         with pytest.raises(ValueError, match="ACK does not identify the outstanding command"):
             await hardware.apply(green())
-        assert hardware.delivery.status == "FAULT"
+        assert str(hardware.delivery.status) == "FAULT"
         assert hardware.delivery.acknowledged_state is None
         assert hardware.delivery.physically_confirmed is None
 
@@ -285,7 +285,7 @@ def test_host_rejects_stale_future_and_tampered_feedback(
         hardware = ProtocolHardwareController(transport, requirements(), INSTANCE, KEY)
         with pytest.raises(ValueError):
             await hardware.apply(green())
-        assert hardware.delivery.status == "FAULT"
+        assert str(hardware.delivery.status) == "FAULT"
         assert hardware.delivery.physically_confirmed is None
         assert hardware.delivery.emulated_feedback is None
 
@@ -301,7 +301,7 @@ def test_host_rejects_replayed_feedback_sample() -> None:
         assert hardware.delivery.status == "ACKNOWLEDGED"
         with pytest.raises(ValueError, match="Replayed feedback"):
             await hardware.refresh_feedback()
-        assert hardware.delivery.status == "FAULT"
+        assert str(hardware.delivery.status) == "FAULT"
         assert hardware.delivery.emulated_feedback is None
         assert hardware.delivery.physically_confirmed is None
 
@@ -330,7 +330,7 @@ def test_safe_request_rejects_uncorrelated_feedback() -> None:
         hardware = ProtocolHardwareController(transport, requirements(), INSTANCE, KEY)
         with pytest.raises(ValueError, match="Safe-program feedback"):
             await hardware.enter_safe()
-        assert hardware.delivery.status == "FAULT"
+        assert str(hardware.delivery.status) == "FAULT"
         assert hardware.delivery.emulated_feedback is None
 
     asyncio.run(exercise())

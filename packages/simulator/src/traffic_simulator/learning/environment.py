@@ -8,6 +8,7 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 from numpy.typing import NDArray
+from traffic_core.models import SignalState
 from traffic_core.settings import Timing
 
 from traffic_simulator.environment import DigitalTwinEnvironment
@@ -91,18 +92,35 @@ class LearningControlEnvironment(gym.Env[NDArray[np.float32], int]):
         return self.step_request(decode_action(int(action)))
 
     def step_request(
-        self, request: ControlRequest
+        self,
+        request: ControlRequest,
+        *,
+        first_signal: SignalState | None = None,
+        prior_switches: int | None = None,
     ) -> tuple[NDArray[np.float32], float, bool, bool, dict[str, Any]]:
         if self.ended or self.world is None:
             raise RuntimeError("reset() required before step or after episode end")
         if not isinstance(request, ControlRequest):
             raise TypeError("Lamp states and raw phases are not policy actions")
+        if first_signal is not None and (
+            prior_switches is None
+            or first_signal != self.supervisor.machine.snapshot(self.world.now)
+        ):
+            raise ValueError("Pre-applied signal must be the current shield snapshot")
         reward = 0.0
         components = dict.fromkeys(self.ledger.raw, 0.0)
-        for _ in range(self.ticks_per_action):
+        for tick in range(self.ticks_per_action):
             before = self.world.ground_truth()  # privileged scorer only
-            previous_switches = self.supervisor.switches
-            action = self.supervisor.apply(request, self.world.observe())
+            previous_switches = (
+                prior_switches
+                if tick == 0 and prior_switches is not None
+                else self.supervisor.switches
+            )
+            action = (
+                first_signal
+                if tick == 0 and first_signal is not None
+                else self.supervisor.apply(request, self.world.observe())
+            )
             reason = self.supervisor.outcome.reason
             self.intervention_counts[reason] = self.intervention_counts.get(reason, 0) + 1
             observed = self.world.step(action)

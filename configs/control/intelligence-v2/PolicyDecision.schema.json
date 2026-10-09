@@ -1,0 +1,133 @@
+{
+  "$defs": {
+    "ControlAction": {
+      "additionalProperties": false,
+      "properties": {
+        "requested_phase": {
+          "$ref": "#/$defs/Phase"
+        },
+        "requested_duration_s": {
+          "maximum": 180,
+          "minimum": 1,
+          "title": "Requested Duration S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "requested_phase",
+        "requested_duration_s"
+      ],
+      "title": "ControlAction",
+      "type": "object"
+    },
+    "Phase": {
+      "enum": [
+        "north_south",
+        "east_west",
+        "pedestrian"
+      ],
+      "title": "Phase",
+      "type": "string"
+    },
+    "PolicyMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "policy_id": {
+          "minLength": 1,
+          "title": "Policy Id",
+          "type": "string"
+        },
+        "version": {
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "learned": {
+          "default": false,
+          "title": "Learned",
+          "type": "boolean"
+        },
+        "weights_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Weights Sha256"
+        },
+        "allowed_modes": {
+          "default": [
+            "SIMULATION",
+            "SHADOW"
+          ],
+          "items": {
+            "enum": [
+              "SIMULATION",
+              "SHADOW"
+            ],
+            "type": "string"
+          },
+          "title": "Allowed Modes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "policy_id",
+        "version"
+      ],
+      "title": "PolicyMetadata",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "metadata": {
+      "$ref": "#/$defs/PolicyMetadata"
+    },
+    "proposed": {
+      "$ref": "#/$defs/ControlAction"
+    },
+    "available_phases": {
+      "items": {
+        "$ref": "#/$defs/Phase"
+      },
+      "title": "Available Phases",
+      "type": "array"
+    },
+    "facts": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "title": "Facts",
+      "type": "object"
+    },
+    "interpretation": {
+      "default": "No causal explanation of neural internals is asserted",
+      "title": "Interpretation",
+      "type": "string"
+    }
+  },
+  "required": [
+    "metadata",
+    "proposed",
+    "available_phases",
+    "facts"
+  ],
+  "title": "PolicyDecision",
+  "type": "object"
+}

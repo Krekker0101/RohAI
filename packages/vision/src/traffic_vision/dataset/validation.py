@@ -89,6 +89,15 @@ def validate_dataset(
         return True
 
     for video_source in dataset.sources:
+        rights = video_source.rights
+        if dataset.purpose == "field" and (
+            rights is None or not rights.training_allowed or not rights.privacy_reviewed
+        ):
+            add(
+                "usage_rights_unverified",
+                video_source.source_id,
+                "Field data requires explicit training rights and attributed privacy review",
+            )
         if check(video_source.video, "video") and decode_videos:
             capture = cv2.VideoCapture(str(inside(root, video_source.video.path)))
             try:

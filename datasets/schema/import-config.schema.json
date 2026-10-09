@@ -1,0 +1,342 @@
+{
+  "$defs": {
+    "Conditions": {
+      "additionalProperties": false,
+      "properties": {
+        "day_night": {
+          "enum": [
+            "day",
+            "night",
+            "twilight",
+            "unknown"
+          ],
+          "title": "Day Night",
+          "type": "string"
+        },
+        "weather": {
+          "enum": [
+            "dry",
+            "rain",
+            "snow",
+            "fog",
+            "mixed",
+            "unknown"
+          ],
+          "title": "Weather",
+          "type": "string"
+        },
+        "traffic_density": {
+          "enum": [
+            "low",
+            "moderate",
+            "high",
+            "unknown"
+          ],
+          "title": "Traffic Density",
+          "type": "string"
+        },
+        "occlusion": {
+          "enum": [
+            "none",
+            "light",
+            "heavy",
+            "unknown"
+          ],
+          "title": "Occlusion",
+          "type": "string"
+        },
+        "camera_angle": {
+          "enum": [
+            "overhead",
+            "oblique",
+            "low",
+            "unknown"
+          ],
+          "title": "Camera Angle",
+          "type": "string"
+        },
+        "lighting": {
+          "enum": [
+            "good",
+            "low",
+            "glare",
+            "backlit",
+            "unknown"
+          ],
+          "title": "Lighting",
+          "type": "string"
+        },
+        "tilt_degrees": {
+          "anyOf": [
+            {
+              "maximum": 90,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tilt Degrees"
+        }
+      },
+      "required": [
+        "day_night",
+        "weather",
+        "traffic_density",
+        "occlusion",
+        "camera_angle",
+        "lighting"
+      ],
+      "title": "Conditions",
+      "type": "object"
+    },
+    "MediaSource": {
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "recording_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "title": "Recording Id",
+          "type": "string"
+        },
+        "camera_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "title": "Camera Id",
+          "type": "string"
+        },
+        "intersection_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "title": "Intersection Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "video",
+            "images"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "paths": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 100000,
+          "minItems": 1,
+          "title": "Paths",
+          "type": "array"
+        },
+        "captured_at": {
+          "format": "date-time",
+          "title": "Captured At",
+          "type": "string"
+        },
+        "conditions": {
+          "$ref": "#/$defs/Conditions"
+        },
+        "rights": {
+          "$ref": "#/$defs/UsageRights"
+        },
+        "scene_domain": {
+          "enum": [
+            "REAL_ROAD",
+            "PHYSICAL_MAKET",
+            "SYNTHETIC"
+          ],
+          "title": "Scene Domain",
+          "type": "string"
+        },
+        "provenance": {
+          "minLength": 1,
+          "title": "Provenance",
+          "type": "string"
+        },
+        "stride": {
+          "default": 1,
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Stride",
+          "type": "integer"
+        },
+        "labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Labels",
+          "type": "object"
+        },
+        "label_format": {
+          "default": "yolo",
+          "enum": [
+            "yolo",
+            "coco",
+            "rohai"
+          ],
+          "title": "Label Format",
+          "type": "string"
+        },
+        "coco_category_mapping": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Coco Category Mapping",
+          "type": "object"
+        },
+        "coco_image_ids": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Coco Image Ids",
+          "type": "object"
+        }
+      },
+      "required": [
+        "source_id",
+        "recording_id",
+        "camera_id",
+        "intersection_id",
+        "kind",
+        "paths",
+        "captured_at",
+        "conditions",
+        "rights",
+        "scene_domain",
+        "provenance"
+      ],
+      "title": "MediaSource",
+      "type": "object"
+    },
+    "ObjectKind": {
+      "enum": [
+        "car",
+        "bus",
+        "truck",
+        "motorcycle",
+        "bicycle",
+        "pedestrian",
+        "emergency_vehicle",
+        "unknown"
+      ],
+      "title": "ObjectKind",
+      "type": "string"
+    },
+    "UsageRights": {
+      "additionalProperties": false,
+      "properties": {
+        "license_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "License Id",
+          "type": "string"
+        },
+        "owner": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Owner",
+          "type": "string"
+        },
+        "source_reference": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Source Reference",
+          "type": "string"
+        },
+        "training_allowed": {
+          "default": false,
+          "title": "Training Allowed",
+          "type": "boolean"
+        },
+        "redistribution_allowed": {
+          "default": false,
+          "title": "Redistribution Allowed",
+          "type": "boolean"
+        },
+        "privacy_reviewed": {
+          "default": false,
+          "title": "Privacy Reviewed",
+          "type": "boolean"
+        },
+        "reviewed_by": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Reviewed By",
+          "type": "string"
+        },
+        "evidence": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Evidence",
+          "type": "string"
+        }
+      },
+      "required": [
+        "license_id",
+        "owner",
+        "source_reference",
+        "reviewed_by",
+        "evidence"
+      ],
+      "title": "UsageRights",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "dataset_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "version": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+      "title": "Version",
+      "type": "string"
+    },
+    "purpose": {
+      "default": "field",
+      "enum": [
+        "field",
+        "synthetic_fixture"
+      ],
+      "title": "Purpose",
+      "type": "string"
+    },
+    "class_mapping": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ObjectKind"
+      },
+      "title": "Class Mapping",
+      "type": "object"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/MediaSource"
+      },
+      "maxItems": 10000,
+      "minItems": 1,
+      "title": "Sources",
+      "type": "array"
+    },
+    "max_sampled_frames": {
+      "default": 10000,
+      "maximum": 1000000,
+      "minimum": 1,
+      "title": "Max Sampled Frames",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "dataset_id",
+    "version",
+    "class_mapping",
+    "sources"
+  ],
+  "title": "ImportSpec",
+  "type": "object"
+}

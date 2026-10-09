@@ -204,6 +204,96 @@ def detection_metrics(
     }
 
 
+def hota_metrics(
+    frames: tuple[tuple[str, FrameAnnotation, PredictionFrame], ...], class_ids: tuple[int, ...]
+) -> dict[str, Any]:
+    """Class-aware HOTA, averaged over 19 IoU thresholds; identity namespaces per sequence.
+
+    Global alignment uses normalized potential matches before per-frame assignment.
+    Protocol reference: TrackEval's published HOTA algorithm (independent implementation).
+    """
+    truth_counts: Counter[tuple[str, str]] = Counter()
+    predicted_counts: Counter[tuple[str, str]] = Counter()
+    potential: dict[tuple[tuple[str, str], tuple[str, str]], float] = defaultdict(float)
+    prepared = []
+    for sequence, ann, frame in frames:
+        eligible = set(class_ids).intersection(ann.exhaustive_classes)
+        gt = [o for o in ann.objects if o.class_id in eligible and not o.ignore]
+        pred = [
+            p
+            for p in frame.tracks
+            if p.class_id in eligible
+            and p.track_id is not None
+            and not any(
+                o.ignore and o.class_id == p.class_id and iou(o.bbox, p.bbox) >= 0.5
+                for o in ann.objects
+            )
+        ]
+        if any(o.track_id is None for o in gt) or len({o.track_id for o in gt}) != len(gt):
+            raise ValueError("HOTA requires complete unique ground-truth identities")
+        if len({p.track_id for p in pred}) != len(pred):
+            raise ValueError("HOTA requires unique predicted identities")
+        gids = [(sequence, str(o.track_id)) for o in gt]
+        pids = [(sequence, str(p.track_id)) for p in pred]
+        truth_counts.update(gids)
+        predicted_counts.update(pids)
+        similarities = [
+            [iou(g.bbox, p.bbox) if g.class_id == p.class_id else 0 for p in pred] for g in gt
+        ]
+        row_sums = [sum(row) for row in similarities]
+        column_sums = [sum(row[j] for row in similarities) for j in range(len(pred))]
+        for i, gid in enumerate(gids):
+            for j, pid in enumerate(pids):
+                similarity = similarities[i][j]
+                denominator = row_sums[i] + column_sums[j] - similarity
+                if denominator > 0:
+                    potential[gid, pid] += similarity / denominator
+        prepared.append((gids, pids, similarities))
+    alignment = {
+        pair: value / (truth_counts[pair[0]] + predicted_counts[pair[1]] - value)
+        for pair, value in potential.items()
+    }
+    counts: list[Counter[tuple[tuple[str, str], tuple[str, str]]]] = [Counter() for _ in range(19)]
+    for gids, pids, similarities in prepared:
+        weights = [
+            [alignment.get((g, p), 0) * similarities[i][j] for j, p in enumerate(pids)]
+            for i, g in enumerate(gids)
+        ]
+        for i, j in assignment(weights):
+            for index in range(19):
+                if similarities[i][j] >= (index + 1) * 0.05 - 1e-12:
+                    counts[index][gids[i], pids[j]] += 1
+    n_gt, n_pred = sum(truth_counts.values()), sum(predicted_counts.values())
+    if not n_gt and not n_pred:
+        return {"HOTA": None, "HOTA_status": "NO_EVALUATED_IDENTITIES", "HOTA_thresholds": []}
+    results = []
+    for index, matched in enumerate(counts):
+        tp = sum(matched.values())
+        detection = tp / (n_gt + n_pred - tp)
+        association = (
+            sum(
+                value * value / (truth_counts[g] + predicted_counts[p] - value)
+                for (g, p), value in matched.items()
+            )
+            / tp
+            if tp
+            else 0.0
+        )
+        results.append(
+            {
+                "iou": (index + 1) * 0.05,
+                "DetA": detection,
+                "AssA": association,
+                "HOTA": (detection * association) ** 0.5,
+            }
+        )
+    return {
+        "HOTA": sum(row["HOTA"] for row in results) / 19,
+        "HOTA_status": "MEASURED",
+        "HOTA_thresholds": results,
+    }
+
+
 def tracking_metrics(
     frames: tuple[tuple[str, FrameAnnotation, PredictionFrame], ...], class_ids: tuple[int, ...]
 ) -> dict[str, Any]:
@@ -312,6 +402,5 @@ def tracking_metrics(
         "false_negatives": false_negative,
         "detection_recall": matched_count / n_gt if n_gt else None,
         "ground_truth_detections": n_gt,
-        "HOTA": None,
-        "HOTA_status": "not implemented; global IDF1 is the available identity metric",
+        **hota_metrics(frames, class_ids),
     }

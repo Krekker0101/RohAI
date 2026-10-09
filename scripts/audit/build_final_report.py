@@ -7,14 +7,15 @@ import json
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 
 ROOT = Path("artifacts/final-audit/20261004")
 
 
-def read(name: str) -> dict:
-    return json.loads((ROOT / name).read_text(encoding="utf-8"))
+def read(name: str) -> dict[str, Any]:
+    return cast(dict[str, Any], json.loads((ROOT / name).read_text(encoding="utf-8")))
 
 
 def main() -> None:

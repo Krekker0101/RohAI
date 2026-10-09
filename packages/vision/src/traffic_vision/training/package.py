@@ -93,6 +93,8 @@ def verify_package(root: Path, *, expected_hash: str | None = None) -> ModelPack
         raise ValueError("Incompatible classes file")
     training = read_verified(root / "training.json")
     config = TrainingConfig.model_validate(training["training_config"])
+    if config.purpose != "field":
+        raise PermissionError("Synthetic fixture checkpoints cannot become deployment packages")
     if (
         training["report_sha256"] != package.training_manifest_sha256
         or training["run_id"] != package.training_run
@@ -114,6 +116,8 @@ def seal_package(run: Path, destination: Path) -> ModelPackage:
     if training["status"] != "COMPLETED":
         raise ValueError("Only a completed training run can be packaged")
     config = TrainingConfig.model_validate(training["training_config"])
+    if config.purpose != "field":
+        raise PermissionError("Synthetic fixture checkpoints cannot become deployment packages")
     if config.sha256 != training["config_sha256"]:
         raise ValueError("Training configuration hash mismatch")
     release = open_release(config.dataset_release)

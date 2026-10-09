@@ -89,6 +89,9 @@ class YOLODetector:
             device=self.settings.device,
             verbose=False,
         )
+        # Ultralytics select_device resets the global CPU pool during predictor setup.
+        # Apply the configured inference budget after that initialization, not only before it.
+        torch.set_num_threads(self.settings.torch_threads)
 
     def process(self, frame: VideoFrame) -> tuple[Detection, ...]:
         if self._model is None or self.manifest is None:

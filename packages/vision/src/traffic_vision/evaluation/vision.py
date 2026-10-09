@@ -68,6 +68,10 @@ def strata(dataset: DatasetSpec, frames: tuple[FrameRecord, ...]) -> dict[str, t
             "weather": source.conditions.weather,
             "traffic_density": source.conditions.traffic_density,
             "occlusion": source.conditions.occlusion,
+            "scene_domain": source.scene_domain,
+            "intersection": source.intersection_id,
+            "camera_angle": source.conditions.camera_angle,
+            "lighting": source.conditions.lighting,
         }
         groups["all"].append(frame.frame_id)
         for key, value in values.items():
@@ -132,9 +136,47 @@ def evaluate_predictions(
         }
     return {
         "detection": groups["all"]["detection"],
+        "small_objects": small_object_metrics(
+            {key: annotations[key] for key in predicted}, predicted, classes, operating_confidence
+        ),
         "tracking": groups["all"]["tracking"],
         "strata": groups,
         "class_mapping": {str(k): v.value for k, v in dataset.class_mapping.items()},
+    }
+
+
+def small_object_metrics(
+    annotations: dict[str, FrameAnnotation],
+    predictions: dict[str, PredictionFrame],
+    classes: tuple[int, ...],
+    confidence: float,
+) -> dict[str, Any]:
+    """Pixel-area stratum: small <32^2 at original resolution; larger boxes ignored."""
+
+    def small(bbox: BoundingBox) -> bool:
+        return (bbox.x2 - bbox.x1) * (bbox.y2 - bbox.y1) < 32 * 32
+
+    truth = {
+        key: ann.model_copy(
+            update={
+                "objects": tuple(
+                    obj.model_copy(update={"ignore": obj.ignore or not small(obj.bbox)})
+                    for obj in ann.objects
+                )
+            }
+        )
+        for key, ann in annotations.items()
+        if Layer.DETECTION in ann.layers
+    }
+    predicted = {
+        key: predictions[key].model_copy(
+            update={"detections": tuple(p for p in predictions[key].detections if small(p.bbox))}
+        )
+        for key in truth
+    }
+    return {
+        "area_protocol": "Original-image bbox area <1024 px2; larger GT ignored",
+        **detection_metrics(truth, predicted, classes, operating_confidence=confidence),
     }
 
 

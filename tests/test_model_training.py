@@ -15,7 +15,7 @@ from traffic_core.models import ObjectKind
 from traffic_vision.cli import main
 from traffic_vision.dataset.files import canonical_hash, digest_file, write_new_json
 from traffic_vision.dataset.release import seal_release
-from traffic_vision.dataset.schema import FrameAnnotation, Split
+from traffic_vision.dataset.schema import FrameAnnotation, Split, UsageRights
 from traffic_vision.dataset.validation import read_annotations
 from traffic_vision.detector import YOLODetector
 from traffic_vision.evaluation.vision import code_fingerprint, finish_report
@@ -60,7 +60,19 @@ def training_fixture(root: Path) -> TrainingConfig:
             "frames": tuple(frames),
             "sources": tuple(
                 s.model_copy(
-                    update={"usage": "field", "pretrained_exposure": "audited_no_known_overlap"}
+                    update={
+                        "usage": "field",
+                        "pretrained_exposure": "audited_no_known_overlap",
+                        "rights": UsageRights(
+                            license_id="TEST_ONLY",
+                            owner="fixture",
+                            source_reference="synthetic fixture",
+                            training_allowed=True,
+                            privacy_reviewed=True,
+                            reviewed_by="UNIT_TEST_ONLY",
+                            evidence="Mock metadata for unit contract, never field evidence",
+                        ),
+                    }
                 )
                 for s in spec.sources
             ),

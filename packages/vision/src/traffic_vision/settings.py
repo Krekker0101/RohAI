@@ -94,6 +94,7 @@ class VisionSettings(Model):
     torch_threads: int = Field(default=2, ge=1, le=32)
     tracker_reset_gap_seconds: float = Field(default=3, gt=0, le=60)
     capture_timeout_ms: int = Field(default=1500, ge=100, le=10000)
+    camera_fps: float = Field(default=30, ge=1, le=120)
     reconnect_attempts: int = Field(default=3, ge=0, le=20)
     reconnect_delay_seconds: float = Field(default=0.5, ge=0.1, le=10)
     startup_timeout_seconds: float = Field(default=90, ge=5, le=300)
@@ -103,6 +104,7 @@ class VisionSettings(Model):
     synthetic_frames: int = Field(default=600, ge=1, le=100000)
     synthetic_fps: float = Field(default=15, ge=1, le=60)
     jpeg_quality: int = Field(default=85, ge=40, le=100)
+    debug_overlay: bool = False
     analytics: AnalyticsSettings = Field(default_factory=AnalyticsSettings)
 
     @model_validator(mode="after")

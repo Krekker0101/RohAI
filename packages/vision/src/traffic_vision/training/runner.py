@@ -15,8 +15,8 @@ from pathlib import Path
 from typing import Any
 
 from traffic_vision.dataset.files import digest_file, inside, write_new_json
-from traffic_vision.dataset.release import open_release, training_view
-from traffic_vision.dataset.schema import Layer, Split
+from traffic_vision.dataset.release import open_release, select_frames, training_view
+from traffic_vision.dataset.schema import FrameRecord, Layer, Split
 from traffic_vision.dataset.validation import read_annotations, validate_dataset
 from traffic_vision.evaluation.vision import code_fingerprint, finish_report
 from traffic_vision.manifest import ModelManifest
@@ -50,6 +50,8 @@ def git_state() -> dict[str, Any]:
 
 def preflight(config: TrainingConfig) -> dict[str, Any]:
     release = open_release(config.dataset_release)
+    if config.purpose != release.dataset.purpose:
+        raise ValueError("Training purpose must match the immutable dataset purpose")
     root = (
         config.dataset_release if config.dataset_release.is_dir() else config.dataset_release.parent
     )
@@ -62,7 +64,7 @@ def preflight(config: TrainingConfig) -> dict[str, Any]:
     if not validation.valid or validation.near_duplicate_candidates:
         raise ValueError("Invalid dataset or unresolved leakage review")
     for split in (Split.TRAIN, Split.VALIDATION):
-        if not training_view(config.dataset_release, split, config.baseline):
+        if not training_frames(config, split):
             raise ValueError(f"Empty {split}")
     base = ModelManifest.load(config.base_manifest)
     if base.architecture != "YOLO26n" or digest_file(config.base_model) != base.weights_hash:
@@ -74,11 +76,29 @@ def preflight(config: TrainingConfig) -> dict[str, Any]:
         raise ValueError("Dataset contains classes unsupported by baseline")
     return {
         "status": "READY",
+        "purpose": config.purpose,
+        "field_model": config.purpose == "field",
         "dataset_hash": release.manifest_sha256,
         "baseline_sha256": read_verified(config.baseline)["report_sha256"],
         "base_weights_sha256": base.weights_hash,
         "config_sha256": config.sha256,
     }
+
+
+def training_frames(config: TrainingConfig, split: Split) -> tuple[FrameRecord, ...]:
+    if config.purpose == "field":
+        return training_view(config.dataset_release, split, config.baseline)
+    if split not in (Split.TRAIN, Split.VALIDATION):
+        raise PermissionError("Fixture training also forbids held-out TEST/CHALLENGE")
+    release = open_release(config.dataset_release)
+    if release.dataset.purpose != "synthetic_fixture" or any(
+        s.usage != "synthetic_fixture" for s in release.dataset.sources
+    ):
+        raise PermissionError("Fixture mode cannot consume field data")
+    baseline = read_verified(config.baseline)
+    if baseline.get("dataset_manifest_sha256") != release.manifest_sha256:
+        raise ValueError("Fixture baseline must refer to the same immutable dataset")
+    return select_frames(release, split)
 
 
 def export_yolo(config: TrainingConfig, destination: Path) -> dict[str, Any]:
@@ -95,7 +115,7 @@ def export_yolo(config: TrainingConfig, destination: Path) -> dict[str, Any]:
     sources = {s.source_id: s for s in release.dataset.sources}
     inventory: dict[str, Any] = {}
     for split, folder in ((Split.TRAIN, "train"), (Split.VALIDATION, "val")):
-        frames = training_view(config.dataset_release, split, config.baseline)
+        frames = training_frames(config, split)
         accepted: list[str] = []
         excluded: list[str] = []
         for frame in frames:

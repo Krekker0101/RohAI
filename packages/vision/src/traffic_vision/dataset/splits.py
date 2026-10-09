@@ -15,6 +15,7 @@ def source_groups(source: SourceVideo) -> dict[str, tuple[str, ...]]:
         "recording": (source.recording_id, source.video.sha256),
         "camera": (source.camera_id,),
         "day": days,
+        "intersection": (source.intersection_id,),
     }
 
 

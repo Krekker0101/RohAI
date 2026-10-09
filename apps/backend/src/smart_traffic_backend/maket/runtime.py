@@ -11,7 +11,7 @@ from typing import Any
 
 import cv2
 import numpy as np
-from traffic_core.models import Decision, SignalStage
+from traffic_core.models import Decision, ObservationStatus, SignalStage
 from traffic_simulator.learning.safety import SafetySupervisor
 from traffic_simulator.twin_models import ObservedTrafficState
 from traffic_vision.detector import CalibrationDetector, Detector, YOLODetector
@@ -20,12 +20,15 @@ from traffic_vision.manifest import ModelManifest
 from traffic_vision.pipeline import VisionPipeline
 from traffic_vision.sources import create_source
 
+from smart_traffic_backend.hardware_service import HardwareApplicationService
 from smart_traffic_backend.maket.analytics import MaketAnalyzer
+from smart_traffic_backend.maket.calibration import camera_signature
 from smart_traffic_backend.maket.config import MaketCalibration, MaketConfig
 from smart_traffic_backend.maket.discovery import camera_indices, probe_camera
 from smart_traffic_backend.maket.policy import CameraPolicy, request
 from smart_traffic_backend.maket.serial import Esp32TrafficLightController, signal_name
 from smart_traffic_backend.maket.session import SessionRecorder
+from smart_traffic_backend.maket.vision_state import estimate
 
 
 class MaketRuntime:
@@ -33,6 +36,9 @@ class MaketRuntime:
         self.now = 0.0
         self.config = config
         self.hardware = Esp32TrafficLightController(config.hardware)
+        self.hardware_service = HardwareApplicationService(
+            self.hardware, config.timing, physical=True
+        )
         self.supervisor = SafetySupervisor(config.timing)
         self.learned_error: str | None = None
         try:
@@ -98,6 +104,7 @@ class MaketRuntime:
         )
         self.pipeline.signal_provider = lambda: self.supervisor.machine.snapshot(self.now)
         self.recorder = SessionRecorder(config)
+        self.hardware.event_sink = self.recorder.submit
         analyzer = self.pipeline.analyzer
         assert isinstance(analyzer, MaketAnalyzer)
         analyzer.event_sink = lambda event: self.recorder.submit("traffic_event", event)
@@ -136,6 +143,9 @@ class MaketRuntime:
         self._alignment_task: asyncio.Task[None] | None = None
         self.metrics: dict[str, Any] = {}
         self.last_decision_id: str | None = None
+        self._camera_epoch: int | None = None
+        self.physical_permission_until: float | None = None
+        self.setup_state: dict[str, Any] = {"state": "NOT_STARTED", "issues": []}
 
     async def start(self) -> None:
         if self.config.output_mode == "PHYSICAL_OUTPUT":
@@ -196,6 +206,11 @@ class MaketRuntime:
             c.geometry.source_id != self.config.camera.source_id
         ):
             self.alignment = "INVALID_ID_OR_RESOLUTION"
+            return False
+        if isinstance(c, MaketCalibration) and c.camera_signature != camera_signature(
+            self.config.camera
+        ):
+            self.alignment = "INVALID_CAMERA_SETTINGS"
             return False
         return (
             self.alignment == "VALID"
@@ -303,6 +318,7 @@ class MaketRuntime:
             and time.monotonic() - a.captured_at < self.config.camera.max_frame_age_seconds,
             "firmware_timing_matches": firmware_timing,
             "emergency_stop_released": ack.get("estop") is False,
+            "independent_protection_verified": self.config.hardware.independent_protection_verified,
             "learned_release_approved": self.policy.name != "LEARNED_AI"
             or self.policy_mode != "ACTIVE"
             or (self.policy.active_approved and self.config.vision_profile == "MAKET_MODEL"),
@@ -327,6 +343,8 @@ class MaketRuntime:
             raise ValueError("Preflight failed: " + ", ".join(failed))
         # Fault reset requires explicit operator action AND the device local button.
         await self.hardware.command("ARM")
+        self.hardware_service.adapter = self.hardware
+        self.hardware_service.reset()
         self.supervisor = SafetySupervisor(self.config.timing)
         self.started = time.monotonic()
         self.policy.supervisor = self.baseline.supervisor = self.supervisor
@@ -350,7 +368,7 @@ class MaketRuntime:
             self.recorder.submit("demo_stop", {"reason": reason, "physical_commands": False})
             return
         try:
-            await self.hardware.enter_safe()
+            await self.hardware_service.enter_safe()
             self.state = "SAFE"
         except Exception as error:
             self.failure = f"{reason}; stop ACK unavailable: {error}"
@@ -365,6 +383,10 @@ class MaketRuntime:
             raise ValueError("Stop before reconnect")
         await self.hardware.close()
         self.hardware = Esp32TrafficLightController(self.config.hardware)
+        self.hardware.event_sink = self.recorder.submit
+        self.hardware_service = HardwareApplicationService(
+            self.hardware, self.config.timing, physical=True
+        )
         await self.hardware.connect()
         self.state = "READY_FOR_OPERATOR_CONFIRMATION"
         self.policy_mode = "SHADOW"
@@ -384,11 +406,14 @@ class MaketRuntime:
             "no_signal_conflict",
             "firmware_timing_matches",
             "emergency_stop_released",
+            "independent_protection_verified",
         )
         failed = [key for key in required if not checks[key]]
         if failed:
             raise ValueError("Hardware preflight failed: " + ", ".join(failed))
         await self.hardware.command("ARM")
+        self.hardware_service.adapter = self.hardware
+        self.hardware_service.reset()
         self.supervisor = SafetySupervisor(self.config.timing)
         self.policy.supervisor = self.baseline.supervisor = self.supervisor
         self.started = time.monotonic()
@@ -478,6 +503,7 @@ class MaketRuntime:
                 "no_signal_conflict",
                 "firmware_timing_matches",
                 "emergency_stop_released",
+                "independent_protection_verified",
             )
         )
         return {"VISION_READY": vision, "CONTROL_READY": control, "HARDWARE_READY": hardware}
@@ -580,6 +606,18 @@ class MaketRuntime:
                         lambda f: f.exception() if not f.cancelled() else None
                     )
             analysis = self.pipeline.latest_analysis
+            if (
+                (self.running or self.demo_running)
+                and self.physical_permission_until is not None
+                and time.monotonic() >= self.physical_permission_until
+            ):
+                await self.emergency_stop("local_permission_expired")
+            capture = self.pipeline.latest_capture
+            if capture is not None:
+                if self._camera_epoch is not None and capture.stream_epoch != self._camera_epoch:
+                    self.revalidation_required = True
+                    await self.emergency_stop("camera_stream_recovered_revalidation_required")
+                self._camera_epoch = capture.stream_epoch
             fallback = None
             try:
                 if analysis is not None and self.calibration is not None:
@@ -605,6 +643,7 @@ class MaketRuntime:
                             "no_signal_conflict",
                             "firmware_timing_matches",
                             "emergency_stop_released",
+                            "independent_protection_verified",
                         )
                     ):
                         raise RuntimeError("Hardware Test readiness lost")
@@ -623,7 +662,7 @@ class MaketRuntime:
                         self.supervisor.machine.green_seconds,
                         self.config.timing.max_green_seconds - margin,
                     )
-                    await self.hardware.apply(signals)
+                    await self.hardware_service.apply(signals)
                     if (previous.phase, previous.stage) != (signals.phase, signals.stage):
                         self.supervisor.machine.entered_at = time.monotonic() - self.started
                     self.recorder.submit(
@@ -685,7 +724,7 @@ class MaketRuntime:
                         self.supervisor.machine.green_seconds,
                         self.config.timing.max_green_seconds - margin,
                     )
-                    await self.hardware.apply(signals)
+                    await self.hardware_service.apply(signals)
                     if (previous_state.phase, previous_state.stage) != (
                         signals.phase,
                         signals.stage,
@@ -737,9 +776,8 @@ class MaketRuntime:
                 and analysis.video.frame_id != self._last_recorded_frame
             ):
                 self._last_recorded_frame = analysis.video.frame_id
-                self.recorder.submit("frame", analysis.video.frame.copy())
-                self.recorder.submit(
-                    "recorded_frame",
+                self.recorder.submit_frame(
+                    analysis.video.frame.copy(),
                     {
                         "source_frame_id": analysis.video.frame_id,
                         "captured_at_monotonic": analysis.video.captured_at,
@@ -757,13 +795,73 @@ class MaketRuntime:
         return {
             "state": "CALIBRATED" if valid else "CALIBRATION_INVALID" if c else "NO_CALIBRATION",
             "source_id": self.config.camera.source_id,
-            "geometry": c.geometry.model_dump(mode="json") if valid else None,
+            "geometry": c.geometry.model_dump(mode="json") if valid and c is not None else None,
         }
 
     def snapshot(self) -> dict[str, Any]:
+        from smart_traffic_backend.maket.setup import diagnostic_issues
+
         a = self.pipeline.observation()
+        analyzed = self.pipeline.latest_analysis
+        vision_state = None
+        confirmed_calibration = self.calibration_check()
+        traffic_data = a.traffic.model_dump(mode="json") if a else None
+        if a is not None and not confirmed_calibration and traffic_data is not None:
+            traffic_data["directions"] = {
+                direction: type(metrics)
+                .model_validate(
+                    {
+                        **metrics.model_dump(),
+                        "estimated_queue_count": None,
+                        "queue_confidence": 0,
+                        "observation": metrics.observation.model_copy(
+                            update={
+                                "observation_status": ObservationStatus.DEGRADED,
+                                "measurement_confidence": 0,
+                                "failure_reasons": (
+                                    *metrics.observation.failure_reasons,
+                                    "calibration_not_confirmed",
+                                ),
+                            }
+                        ),
+                    }
+                )
+                .model_dump(mode="json")
+                for direction, metrics in a.traffic.directions.items()
+            }
+        if a is not None and analyzed is not None:
+            h, w = analyzed.video.frame.shape[:2]
+            vision_state = estimate(
+                a,
+                captured_at=analyzed.captured_at,
+                now=time.monotonic(),
+                width=w,
+                height=h,
+                calibration=self.calibration,
+                confirmed=confirmed_calibration,
+                status=self.pipeline.status(),
+                slow_speed=self.config.camera.analytics.slow_speed_px_per_second,
+                max_age=self.config.camera.max_frame_age_seconds,
+            ).model_dump(mode="json")
+        signal = self.supervisor.machine.snapshot(self.now)
+        duration = (
+            self.supervisor.machine.green_seconds
+            if signal.stage == SignalStage.GREEN
+            else self.config.timing.yellow_seconds
+            if signal.stage == SignalStage.YELLOW
+            else self.config.timing.all_red_seconds
+        )
         return {
-            "mode": "PHYSICAL_MAKET",
+            "phase_remaining_seconds": max(0, duration - signal.elapsed_seconds)
+            if self.running or self.demo_running
+            else None,
+            "phase_timer_source": "HOST_CONTROLLER_ESTIMATE_NOT_ESP32_READBACK",
+            "vision_state": vision_state,
+            "mode": "PHYSICAL_MAKET"
+            if self.config.output_mode == "PHYSICAL_OUTPUT"
+            else "REAL_VISION",
+            "autosetup": self.setup_state,
+            "issues": diagnostic_issues(self),
             "output_mode": self.config.output_mode,
             "demo_running": self.demo_running,
             "readiness": self.readiness(),
@@ -787,13 +885,14 @@ class MaketRuntime:
             "learned_error": self.learned_error,
             "policy_mode": self.policy_mode,
             "session_id": self.recorder.id,
-            "traffic": a.traffic.model_dump(mode="json") if a else None,
+            "traffic": traffic_data,
             "maket_metrics": self.metrics,
             "tracks": [t.model_dump(mode="json") for t in a.tracks] if a else [],
             "pipeline": self.pipeline.status().model_dump(mode="json"),
             "performance": self.pipeline.performance(),
             "heartbeats": self.pipeline.heartbeat_timestamps(),
             "hardware": self.hardware.snapshot(),
+            "hardware_execution": self.hardware_service.snapshot(),
             "approved_state": signal_name(self.supervisor.machine.snapshot(self.now))
             if self.config.output_mode == "PHYSICAL_OUTPUT"
             else None,
@@ -810,6 +909,9 @@ class MaketRuntime:
                 for k, v in self.latencies.items()
             },
             "recording": {
+                "available": self.recorder.enabled and self.recorder.error is None,
+                "retention_days": self.config.retention_days,
+                "events_written": self.recorder.events_written,
                 "video": self.recorder.record_video,
                 "dropped": self.recorder.dropped,
                 "error": self.recorder.error,

@@ -5,6 +5,7 @@ import hashlib
 import json
 import time
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import torch
@@ -15,6 +16,7 @@ from traffic_simulator.learning.policy import (
     ActuatedController,
     CurrentAdaptiveController,
     FixedTimeController,
+    TrafficPolicy,
 )
 from traffic_simulator.scenarios import catalog
 from traffic_simulator.twin_models import ScenarioDefinition
@@ -40,7 +42,7 @@ def main() -> None:
             raise ValueError("Checkpoint hash mismatch")
         hashes[str(seed)] = {"hash": sha(path), "sidecar": sidecar}
         models[f"learned-{seed}"] = PPO.load(path, device="cpu")
-    results = []
+    results: list[dict[str, Any]] = []
     for seed in (913001, 913002):
         cases = catalog(seed=seed, duration_s=120)
         for name, changes in (
@@ -72,7 +74,7 @@ def main() -> None:
             if args.only is not None and family != args.only:
                 continue
             tapes = set()
-            policies = {
+            policies: dict[str, TrafficPolicy | PPO] = {
                 "fixed": FixedTimeController(Timing()),
                 "adaptive": CurrentAdaptiveController(Timing()),
                 "actuated": ActuatedController(Timing()),
@@ -82,12 +84,12 @@ def main() -> None:
                 env = LearningControlEnvironment(case, lock_scenario_seed=True)
                 try:
                     history, _ = env.reset(seed=case.seed)
-                    if name not in models:
+                    if not isinstance(policy, PPO):
                         policy.reset(case.seed)
                     latency, queues = [], []
                     while not env.ended:
                         start = time.perf_counter()
-                        if name in models:
+                        if isinstance(policy, PPO):
                             action = int(policy.predict(history.copy(), deterministic=True)[0])
                             latency.append((time.perf_counter() - start) * 1000)
                             history, _, _, _, _ = env.step(action)
@@ -99,6 +101,7 @@ def main() -> None:
                         truth = env.world.ground_truth()
                         queues.append(len(truth.queued) + len(truth.upstream))
                     report = env.episode_report()
+                    assert env.world is not None
                     truth = env.world.ground_truth()
                     tapes.add(report["arrival_tape_sha256"])
                     metrics = {

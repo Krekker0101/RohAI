@@ -52,7 +52,7 @@ def test_degraded_is_operator_visible_and_clears_without_latching_fault() -> Non
     recovery.degrade("analytics_degraded")
     assert recovery.reason == "analytics_degraded"
     recovery.restore()
-    assert recovery.state == RecoveryState.HEALTHY
+    assert str(recovery.state) == RecoveryState.HEALTHY.value
     assert recovery.reason is None
 
 
@@ -63,7 +63,7 @@ def test_degradation_cannot_mask_a_latched_fault_or_safe_state() -> None:
     recovery.mark_safe()
     recovery.degrade("observation_degraded")
     recovery.restore()
-    assert recovery.state == RecoveryState.SAFE
+    assert str(recovery.state) == RecoveryState.SAFE.value
     assert recovery.reason == "vision_stale"
     # Leaving SAFE still requires the explicit recovery path and operator confirmation.
     with pytest.raises(RuntimeError):
