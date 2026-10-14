@@ -408,7 +408,9 @@ class VisionPipeline:
                 stage_started = time.monotonic()
                 detections = self.detector.process(frame)
                 if self.settings.inference_hz is not None:
-                    next_inference = time.monotonic() + 1 / self.settings.inference_hz
+                    # The configured rate includes inference time. An overrun
+                    # proceeds to the latest frame without a catch-up queue.
+                    next_inference = stage_started + 1 / self.settings.inference_hz
                 with self._lock:
                     self._stage_latency["inference"].append(
                         (time.monotonic() - stage_started) * 1000

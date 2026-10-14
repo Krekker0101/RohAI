@@ -131,6 +131,45 @@ def test_pipeline_overload_stays_bounded_and_drains_last_frame() -> None:
     assert not any(thread.is_alive() for thread in pipeline._threads)
 
 
+@pytest.mark.parametrize("processing_seconds", [0.06, 0.15])
+def test_inference_rate_includes_processing_without_catchup(
+    monkeypatch: pytest.MonkeyPatch, processing_seconds: float
+) -> None:
+    clock = [100.0]
+    starts: list[float] = []
+
+    class StopClock:
+        stopped = False
+
+        def is_set(self) -> bool:
+            return self.stopped
+
+        def wait(self, seconds: float) -> bool:
+            clock[0] += seconds
+            return self.stopped
+
+    stop = StopClock()
+
+    class TimedDetector(CalibrationDetector):
+        def process(self, frame: VideoFrame) -> tuple[Detection, ...]:
+            starts.append(clock[0])
+            clock[0] += processing_seconds
+            if len(starts) == 3:
+                stop.stopped = True
+            return ()
+
+    source = SyntheticSource()
+    pipeline = make_pipeline(source, TimedDetector(), VisionSettings(inference_hz=10))
+    frame = SimpleNamespace(stream_epoch=0, captured_at=100.0)
+    pipeline._capture = SimpleNamespace(take=lambda: frame)  # type: ignore[assignment]
+    pipeline._stop = stop  # type: ignore[assignment]
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+    pipeline._inference_loop()
+    assert len(starts) == 3
+    assert starts[1] - starts[0] == pytest.approx(max(0.1, processing_seconds))
+    assert starts[2] - starts[1] == pytest.approx(max(0.1, processing_seconds))
+
+
 def test_model_failure_unblocks_capture_and_shuts_down() -> None:
     pipeline = make_pipeline(SyntheticSource(), BrokenDetector())
     pipeline.start()

@@ -85,6 +85,7 @@ def test_pairing_view_only_survives_service_restart(
             == 204
         )
         operator_cookie = client.cookies.get("rohai_local")
+        assert viewer_cookie is not None and operator_cookie is not None
         assert client.get("/api/maket/permissions").json()["setup_authorized"] is True
         refusal = client.post("/api/maket/control", json={"action": "start"}, headers=origin)
         assert refusal.status_code == 409

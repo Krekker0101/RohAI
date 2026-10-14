@@ -102,7 +102,11 @@ def main() -> int:
         if duplicate.returncode or "already running" not in duplicate.stdout:
             raise RuntimeError("Duplicate launcher prevention failed")
         report["duplicate_prevention"] = "PASS"
-        environment = {**os.environ, "ROHAI_ACCEPTANCE_LIVE": "1"}
+        environment = {
+            **os.environ,
+            "ROHAI_ACCEPTANCE_LIVE": "1",
+            "ROHAI_BROWSER_ARTIFACTS": str(output.resolve()),
+        }
         command = (
             ["cmd.exe", "/c", "npm.cmd", "run", "test:e2e"]
             if os.name == "nt"

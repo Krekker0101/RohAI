@@ -1,6 +1,8 @@
 // Real local HTTP services. Devices deliberately absent; replay imagery is a labelled fixture.
 import {test,expect} from '@playwright/test';
 
+const artifacts = process.env.ROHAI_BROWSER_ARTIFACTS ?? '../../artifacts/rohai-1.0';
+
 test.describe('RohAI local workspace acceptance',()=>{
   test.skip(process.env.ROHAI_ACCEPTANCE_LIVE!=='1','Run scripts/run_workspace_acceptance.py first');
   test('DEMO is mock and cannot execute physical outputs',async({request})=>{
@@ -43,7 +45,7 @@ test.describe('RohAI local workspace acceptance',()=>{
     expect(commands).toEqual([]);
     await page.goto('http://127.0.0.1:8001/maket');
     await expect(page.locator('#connection-badge')).toContainText('Backend подключён');
-    await page.screenshot({path:'../../artifacts/rohai-1.0/workspace-desktop.png',fullPage:true});
+    await page.screenshot({path:`${artifacts}/workspace-desktop.png`,fullPage:true});
     await page.context().setOffline(true);
     await expect(page.locator('#connection-badge')).toContainText('Нет подключения');
     await expect(page.locator('#safety-badge')).toContainText('Состояние неизвестно');
@@ -65,6 +67,6 @@ test.describe('RohAI local workspace acceptance',()=>{
     await page.keyboard.press('Tab');await expect(page.locator('.skip-link')).toBeFocused();
     await page.keyboard.press('Enter');await expect(page.locator('#main')).toBeInViewport();
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-    await page.screenshot({path:'../../artifacts/rohai-1.0/workspace-mobile.png',fullPage:true});
+    await page.screenshot({path:`${artifacts}/workspace-mobile.png`,fullPage:true});
   });
 });

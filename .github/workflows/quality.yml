@@ -1,0 +1,103 @@
+name: Quality and release build
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  python:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.11.14'
+          enable-cache: true
+          python-version: '3.14'
+      - run: uv sync --locked --extra vision --extra maket --extra control-training
+      - run: uv run --no-sync ruff check .
+      - run: uv run --no-sync ruff format --check .
+      - run: uv run --no-sync mypy
+      - run: uv run --no-sync pytest --basetemp=.pytest-tmp --junitxml=artifacts/ci/pytest.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: python-evidence
+          path: artifacts/ci/
+  dashboard:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/dashboard/package-lock.json
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.11.14'
+          python-version: '3.14'
+      - run: uv sync --locked --extra vision --extra maket --extra control-training
+      - run: npm ci
+        working-directory: apps/dashboard
+      - run: npm run typecheck
+        working-directory: apps/dashboard
+      - run: npm run lint
+        working-directory: apps/dashboard
+      - run: npm test
+        working-directory: apps/dashboard
+      - run: npm run build
+        working-directory: apps/dashboard
+      - run: node --test apps/maket-ui/overlay.test.mjs
+      - run: uv run --no-sync python scripts/run_workspace_acceptance.py --output artifacts/ci/browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-evidence
+          path: |
+            artifacts/ci/browser/
+            apps/dashboard/test-results/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-dist
+          path: apps/dashboard/dist/
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f docker/Dockerfile -t rohai:ci .
+      - name: Smoke test container
+        run: |
+          docker run -d --name rohai-ci -p 127.0.0.1:8000:8000 rohai:ci
+          for attempt in $(seq 1 30); do
+            if curl --fail http://127.0.0.1:8000/health/ready; then exit 0; fi
+            sleep 1
+          done
+          docker logs rohai-ci
+          exit 1
+      - run: docker rm -f rohai-ci
+        if: always()
+  sumo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.11.14'
+          python-version: '3.14'
+      - run: uv sync --locked
+      - run: uv pip install --python .venv/bin/python -r configs/sumo-requirements.txt
+      - run: uv run --no-sync python scripts/evaluation/sumo_benchmark.py --output artifacts/ci/sumo --seeds 42 43 --seconds 60
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sumo-evidence
+          path: artifacts/ci/sumo/

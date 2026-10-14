@@ -4,7 +4,9 @@ import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root=resolve(process.cwd(),'../..');
-const evidence=resolve(root,'artifacts/maket-validation/simple-ux');
+const evidence=process.env.ROHAI_BROWSER_ARTIFACTS
+  ? resolve(process.env.ROHAI_BROWSER_ARTIFACTS, 'simple-ux')
+  : resolve(root,'artifacts/maket-validation/simple-ux');
 mkdirSync(evidence,{recursive:true});
 
 async function fixture(page:Page, cameraCount=1){

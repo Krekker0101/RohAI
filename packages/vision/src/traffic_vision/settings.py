@@ -5,6 +5,15 @@ from pydantic import Field, model_validator
 from traffic_core.models import Model
 
 
+class AerialSettings(Model):
+    tile_size: int = Field(default=1024, ge=512, le=1536, multiple_of=32)
+    overlap: float = Field(default=0.2, ge=0.1, le=0.4)
+    confidence: float = Field(default=0.25, ge=0.15, le=0.8)
+    max_object_fraction: float = Field(default=0.1, ge=0.02, le=0.3)
+    batch_size: int = Field(default=4, ge=1, le=8)
+    rotated_pass: bool = False
+
+
 class AnalyticsSettings(Model):
     coordinate_domain: Literal["road", "maket_relative"] = "road"
     slow_speed_px_per_second: float = Field(default=12, gt=0)

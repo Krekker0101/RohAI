@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 import cv2
 import numpy as np
+from numpy.typing import NDArray
 from traffic_core.models import ObservationEvidence, ObservationStatus, Uncertainty
 
 from traffic_vision.geometry import IntersectionGeometry, Polygon
@@ -57,6 +58,10 @@ class PerceptionHealthMonitor:
         age_ms = max(0, now - packet.captured_at) * 1000
         gray = np.asarray(cv2.cvtColor(packet.frame, cv2.COLOR_BGR2GRAY), dtype=np.uint8)
         gray = np.asarray(cv2.resize(gray, (320, 180)), dtype=np.uint8)
+        # Every ROI uses the same image transforms. Compute these once per frame,
+        # retaining the exact original pixels and blur/freeze thresholds.
+        laplacian = np.asarray(cv2.Laplacian(gray, cv2.CV_64F), dtype=np.float64)
+        small = np.asarray(cv2.resize(gray, (64, 64)), dtype=np.uint8)
         result = {}
         for approach in geometry.approaches:
             key = approach.direction.value
@@ -82,7 +87,14 @@ class PerceptionHealthMonitor:
             }
             reasons: list[str] = []
             for index, zone in enumerate(zones):
-                zone_checks = self._image_checks(gray, zone, f"{key}:{index}", packet.timestamp)
+                zone_checks = self._image_checks(
+                    gray,
+                    zone,
+                    f"{key}:{index}",
+                    packet.timestamp,
+                    laplacian=laplacian,
+                    small=small,
+                )
                 for name, value in zone_checks.items():
                     checks[name] = bool(checks.get(name, True)) and value
             if not approach.enabled:
@@ -119,7 +131,14 @@ class PerceptionHealthMonitor:
         return result
 
     def _image_checks(
-        self, gray: Image, zone: Polygon, key: str, timestamp: float
+        self,
+        gray: Image,
+        zone: Polygon,
+        key: str,
+        timestamp: float,
+        *,
+        laplacian: NDArray[np.float64] | None = None,
+        small: Image | None = None,
     ) -> dict[str, bool]:
         height, width = gray.shape[:2]
         mask = np.zeros(gray.shape, dtype=np.uint8)
@@ -131,9 +150,12 @@ class PerceptionHealthMonitor:
         visible = pixels.size >= 9
         if not visible:
             return {"roi_visible": False}
-        lap = cv2.Laplacian(gray, cv2.CV_64F)[mask != 0]
+        if laplacian is None:
+            laplacian = np.asarray(cv2.Laplacian(gray, cv2.CV_64F), dtype=np.float64)
+        lap = laplacian[mask != 0]
         texture = float(lap.var())
-        small = cv2.resize(gray, (64, 64))
+        if small is None:
+            small = np.asarray(cv2.resize(gray, (64, 64)), dtype=np.uint8)
         small_mask = cv2.resize(mask, (64, 64), interpolation=cv2.INTER_NEAREST) != 0
         signature = np.where(small_mask, small, 0).astype(np.uint8)
         previous = self.previous.get(key)

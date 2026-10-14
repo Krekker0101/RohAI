@@ -1,0 +1,33 @@
+import { test, expect } from '@playwright/test';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+test('local annotation editor preserves review status and rejects another recording', async ({ page }, testInfo) => {
+  const directory = path.resolve('../../artifacts/realtime-video-review');
+  test.skip(!existsSync(path.join(directory, 'annotate.html')), 'Requires prepared original frames');
+  await page.goto(pathToFileURL(path.join(directory, 'annotate.html')).href);
+  await expect.poll(() => page.locator('canvas').evaluate(canvas => (canvas as HTMLCanvasElement).width)).toBe(3840);
+  await expect(page.locator('canvas')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#reviewer').fill('AUTOMATED_UI_FIXTURE_NOT_GROUND_TRUTH');
+  const box = (await page.locator('canvas').boundingBox())!;
+  await page.mouse.move(box.x + 30, box.y + 30);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 80, box.y + 80);
+  await page.mouse.up();
+  await page.locator('#confirmed').check();
+  const downloadPromise = page.waitForEvent('download');
+  await page.locator('#export').click();
+  const download = await downloadPromise;
+  const exported = testInfo.outputPath('ui-fixture-labels.json');
+  await download.saveAs(exported);
+  const data = JSON.parse(readFileSync(exported, 'utf8'));
+  expect(data.frames[0].objects).toHaveLength(1);
+  expect(data.frames[0].exhaustive).toBe(true);
+  expect(data.frames[1].exhaustive).toBe(false);
+  await page.locator('#undo').click();
+  await expect(page.locator('#confirmed')).not.toBeChecked();
+  data.source_sha256 = 'b'.repeat(64);
+  await page.locator('#import').setInputFiles({ name: 'wrong.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(data)) });
+  await expect(page.getByRole('status')).toContainText('Импорт отклонён');
+});

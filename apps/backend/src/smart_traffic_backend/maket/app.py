@@ -481,7 +481,7 @@ def create_maket_app(
             elif body.action == "policy":
                 if r.running or r.demo_running:
                     raise ValueError("Stop before changing policy/mode")
-                if body.policy not in ("FIXED", "ADAPTIVE", "LEARNED_AI"):
+                if body.policy not in ("FIXED", "ADAPTIVE", "ACTUATED", "LEARNED_AI"):
                     raise ValueError("Invalid policy")
                 if body.policy_mode not in ("SHADOW", "ACTIVE"):
                     raise ValueError("Invalid policy mode")

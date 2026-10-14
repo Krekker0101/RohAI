@@ -1,0 +1,27 @@
+name: Dependency audit
+on:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 5 * * 1'
+permissions:
+  contents: read
+jobs:
+  dependencies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.11.14'
+          python-version: '3.14'
+      - run: uv export --locked --no-dev --all-extras --no-hashes --no-emit-project --format requirements-txt --output-file requirements-audit.txt
+      - run: uvx pip-audit -r requirements-audit.txt --no-deps --disable-pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+        working-directory: apps/dashboard
+      - run: npm audit --audit-level=high
+        working-directory: apps/dashboard

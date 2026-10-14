@@ -23,6 +23,8 @@ from smart_traffic_backend.config import Settings
 from smart_traffic_backend.demo_runtime import DEMO_SOURCE_ID, DemoRuntime
 from smart_traffic_backend.hardware import MockHardwareController, ReplayHardwareAdapter
 from smart_traffic_backend.hardware_service import HardwareApplicationService
+from smart_traffic_backend.operations import ObservationStore, PilotOperations, operations_router
+from smart_traffic_backend.pilot import PilotService, pilot_router
 from smart_traffic_backend.runtime import Runtime
 from smart_traffic_backend.safety_architecture import (
     DecisionAudit,
@@ -30,6 +32,7 @@ from smart_traffic_backend.safety_architecture import (
     PolicyMode,
     SafetyStatus,
 )
+from smart_traffic_backend.video_analysis import VideoJobs, video_router
 from smart_traffic_backend.vision_runtime import VisionRuntime, VisionTelemetry
 
 
@@ -86,6 +89,34 @@ def require_operator(
         raise HTTPException(status_code=401, detail="Invalid operator token")
 
 
+def require_operations_reader(
+    runtime: RuntimeDep, x_operator_token: Annotated[str | None, Header()] = None
+) -> None:
+    supplied = (x_operator_token or "").encode()
+    tokens = (runtime.settings.operator_token, runtime.settings.operations_viewer_token)
+    if not any(
+        token is not None and secrets.compare_digest(supplied, token.get_secret_value().encode())
+        for token in tokens
+    ):
+        raise HTTPException(401, "Invalid viewer or operator token")
+
+
+def require_video_access(
+    request: Request,
+    runtime: RuntimeDep,
+    x_operator_token: Annotated[str | None, Header()] = None,
+) -> None:
+    if runtime.settings.operator_token is None:
+        if request.client is None or request.client.host not in {"127.0.0.1", "::1"}:
+            raise HTTPException(403, "Video analysis without a token is local-only")
+        origin = request.headers.get("origin")
+        allowed = {str(request.base_url).rstrip("/"), *runtime.settings.cors_origins}
+        if origin is not None and origin not in allowed:
+            raise HTTPException(403, "Cross-origin video access requires an operator token")
+    else:
+        require_operator(runtime, x_operator_token)
+
+
 def create_app(
     settings: Settings | None = None,
     hardware: HardwareController | None = None,
@@ -122,16 +153,41 @@ def create_app(
         app.state.runtime = runtime
         app.state.demo_runtime = demo_runtime
         app.state.ai = AIService(config.ai_artifact_directory, config.timing)
+        operations = PilotOperations(
+            runtime,
+            ObservationStore(
+                config.operations_database,
+                config.operations_retention_days,
+                config.operations_site_id,
+            ),
+        )
+        app.state.operations = operations
+        video_jobs = VideoJobs(config)
+        app.state.video_jobs = video_jobs
+        app.state.pilot = PilotService(config)
         try:
             await demo_runtime.start()
             await runtime.start()
+            if config.operations_enabled:
+                await operations.start()
+            await video_jobs.start()
             yield
         finally:
+            await app.state.pilot.close()
+            try:
+                await video_jobs.close()
+            except Exception:
+                logging.getLogger(__name__).exception("Offline video cleanup failed")
+            await operations.close()
             await asyncio.to_thread(app.state.ai.close)
             await runtime.stop()
             await demo_runtime.stop()
 
     app = FastAPI(title="Smart Traffic AI", version="0.1.0", lifespan=lifespan)
+    app.include_router(video_router(require_video_access))
+    app.include_router(pilot_router())
+    if config.operations_enabled:
+        app.include_router(operations_router(require_operator, require_operations_reader))
 
     if config.cors_origins:
         app.add_middleware(

@@ -1,5 +1,26 @@
 # Smart Traffic AI
 
+Локальный голосовой гид с анимированным аватаром, ответами по проверенным источникам проекта и речью без API-ключа: [Пилот AI](docs/PILOT_AI.md).
+
+## Импорт и анализ видео без камеры
+
+Запустите `START_VIDEO_ANALYSIS.bat`, выберите видео и нажмите **Загрузить и анализировать**.
+YOLO26 + ByteTrack обработает все кадры; панель показывает настоящий прогресс,
+рамки, ID, траектории и наблюдения. Есть отмена, история, режим презентации и JSON-отчёт.
+Подготовка, ограничения и проверка: [VIDEO_FILE_ANALYSIS.md](docs/VIDEO_FILE_ANALYSIS.md).
+Для мелких машин с дрона добавлен режим YOLO26s с анализом перекрывающихся участков,
+фильтром крупных рамок и дополнительной проверкой поворотов: [AERIAL_VIDEO.md](docs/AERIAL_VIDEO.md).
+Подсветка дорог, маска поверхности и анимация настоящего процесса анализа:
+[ROAD_OVERLAY.md](docs/ROAD_OVERLAY.md).
+
+## Observation-only pilot
+
+Pilot analytics, JSON/CSV reports, viewer/operator access, monitoring and backup/restore:
+[runbook](docs/pilot/RUNBOOK.md), [product and acceptance](docs/pilot/PRODUCT_AND_ACCEPTANCE.md).
+Enable with `configs/pilot.env.example`; reports appear at `/dashboard/#operations`.
+Offline SUMO comparisons and human-review frame export are available. Physical road
+activation remains blocked; field labels, ESP32 HIL and customer acceptance are separate gates.
+
 ## Presentation Demo — готово к показу
 
 В проект встроены два полностью разделённых канала данных:

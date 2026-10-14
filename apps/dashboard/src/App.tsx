@@ -30,8 +30,14 @@ const Comparison = lazy(() => import('./features/Comparison'));
 const Analytics = lazy(() => import('./features/Analytics'));
 const Calibration = lazy(() => import('./features/Calibration'));
 const Intelligence = lazy(() => import('./features/Intelligence'));
+const Operations = lazy(() => import('./features/Operations'));
+const VideoAnalysis = lazy(() => import('./features/VideoAnalysis'));
+const PilotWidget = lazy(() => import('./features/pilot/PilotWidget'));
+import type { PilotPage } from './features/pilot/api';
 
 const pages = [
+  { id: 'video', label: 'Анализ видео', short: 'Видео', icon: ScanLine, title: 'Видео становится данными.', subtitle: 'Загрузите запись и наблюдайте за работой Vision Engine.' },
+  { id: 'operations', label: 'Отчёты пилота', short: 'Отчёты', icon: Activity, title: 'Наблюдения за период.', subtitle: 'Очереди, доступность и история измерений.' },
   { id: 'intelligence', label: 'RohAI AI 2.0', short: 'AI 2.0', icon: Sparkles, title: 'Verified intelligence.', subtitle: 'Training, release validation and observation-only Shadow.' },
   { id: 'overview', label: 'Обзор перекрёстка', short: 'Обзор', icon: LayoutDashboard, title: 'Город в движении.', subtitle: 'Видеть поток. Понимать спрос. Управлять умнее.' },
   { id: 'analytics', label: 'Видеоаналитика', short: 'Аналитика', icon: ScanLine, title: 'Каждый объект на виду.', subtitle: 'Треки, классы транспорта и производительность Vision Engine.' },
@@ -73,6 +79,7 @@ export function App() {
   const { snapshot, system, safe } = state;
   const policy = snapshot?.policy ?? system?.policy ?? 'adaptive';
   const isDemo = sourceMode === 'demo';
+  const isVideo = page === 'video';
 
   async function act(action: () => Promise<unknown>, message: string) {
     setBusy(true);
@@ -142,8 +149,8 @@ export function App() {
       <div className="sidebar-divider"/>
       <button className="sidebar-button" onClick={() => setDialog('settings')}><Settings2 size={19}/>Подключение</button>
       <div className="sidebar-bottom">
-        <div className={`demo-label ${isDemo ? '' : 'real-label'}`}><span className="live-dot"/>{isDemo ? 'DEMO WORKSPACE' : 'REAL WORKSPACE'}</div>
-        <div className="hardware-summary"><div className="hardware-icon"><ShieldCheck size={20}/></div><div><b>{system?.hardware === 'MockHardwareController' ? 'Mock Hardware' : system?.hardware ?? 'Подключение'}</b><span>{isDemo ? 'Изолированный показ' : 'Команды контроллера'}</span></div></div>
+        <div className={`demo-label ${isDemo ? '' : 'real-label'}`}><span className="live-dot"/>{isVideo ? 'VIDEO WORKSPACE' : isDemo ? 'DEMO WORKSPACE' : 'REAL WORKSPACE'}</div>
+        <div className="hardware-summary"><div className="hardware-icon"><ShieldCheck size={20}/></div><div><b>{isVideo ? 'Видеоанализ' : system?.hardware === 'MockHardwareController' ? 'Mock Hardware' : system?.hardware ?? 'Подключение'}</b><span>{isVideo ? 'Загруженная запись' : isDemo ? 'Изолированный показ' : 'Команды контроллера'}</span></div></div>
         <button className="help-button" onClick={() => setDialog('settings')}><CircleHelp size={17}/>Как показать проект<ArrowUpRight size={15}/></button>
         <div className="sidebar-version">SMART TRAFFIC AI <span>v0.1 · demo-ready</span></div>
       </div>
@@ -153,11 +160,12 @@ export function App() {
       <header className="topbar">
         <div className="breadcrumbs">Центр управления<ChevronRight size={13}/><b>{current.short}</b></div>
         <div className="topbar-right">
-          <div className="segmented source-switch" aria-label="Источник данных">
+          {!isVideo ? <div className="segmented source-switch" aria-label="Источник данных">
             <button className={isDemo ? 'selected demo-selected' : ''} onClick={() => switchSource('demo')}><Sparkles size={13}/>DEMO</button>
             <button className={!isDemo ? 'selected real-selected' : ''} onClick={() => switchSource('real')}><Radio size={13}/>REAL</button>
-          </div>
-          <span className={`connection-status ${safe ? '' : 'disconnected'}`}><span className="live-dot"/>{safe ? (isDemo ? 'Demo готов' : 'Система онлайн') : state.connected ? 'Ожидание данных' : 'Нет соединения'}</span>
+          </div> : <span className="badge blue">Файл · без камеры</span>}
+          {!isVideo ? <span className={`connection-status ${safe ? '' : 'disconnected'}`}><span className="live-dot"/>{safe ? (isDemo ? 'Demo готов' : 'Система онлайн') : state.connected ? 'Ожидание данных' : 'Нет соединения'}</span> : null}
+          <Suspense fallback={null}><PilotWidget page={page as PilotPage} mode={sourceMode}/></Suspense>
           <span className="topbar-separator"/>
           <button className="icon-button" aria-label="Настройки подключения" onClick={() => setDialog('settings')}><Settings2 size={18}/></button>
           <div className="avatar" title="Локальная панель оператора">OP</div>
@@ -165,23 +173,23 @@ export function App() {
       </header>
 
       <main>
-        <div className="page-header"><div><div className="eyebrow"><span className="tiny-line"/> SMART TRAFFIC AI / CONTROL CENTER</div><h1>{current.title}</h1><p>{current.subtitle}</p></div><button className="secondary-button export-button" disabled={!snapshot} onClick={() => downloadJSON(snapshot, `traffic-${snapshot?.sequence}.json`)}><Download size={16}/>Экспорт данных</button></div>
+        <div className="page-header"><div><div className="eyebrow"><span className="tiny-line"/> SMART TRAFFIC AI / {isVideo ? 'VIDEO ANALYSIS' : 'CONTROL CENTER'}</div><h1>{current.title}</h1><p>{current.subtitle}</p></div>{!isVideo ? <button className="secondary-button export-button" disabled={!snapshot} onClick={() => downloadJSON(snapshot, `traffic-${snapshot?.sequence}.json`)}><Download size={16}/>Экспорт данных</button> : null}</div>
 
-        {isDemo ? <div className="demo-mode-banner" role="status"><div className="demo-mode-icon"><Sparkles size={18}/></div><div><b>Презентационный DEMO включён</b><span>Поток и треки синтетические. Decision Engine и Safety Controller — те же, что используются в REAL режиме.</span></div><button onClick={() => switchSource('real')}>Перейти к REAL<ChevronRight size={14}/></button></div> : null}
+        {!isVideo && isDemo ? <div className="demo-mode-banner" role="status"><div className="demo-mode-icon"><Sparkles size={18}/></div><div><b>Презентационный DEMO включён</b><span>Поток и треки синтетические. Decision Engine и Safety Controller — те же, что используются в REAL режиме.</span></div><button onClick={() => switchSource('real')}>Перейти к REAL<ChevronRight size={14}/></button></div> : null}
 
-        <div className="workspace-toolbar">
+        {!isVideo ? <div className="workspace-toolbar">
           <div className="intersection-select"><div className="location-icon"><Waypoints size={18}/></div><div><b>Перекрёсток 01</b><span>{system?.source_id ?? 'Подключение к источнику'}</span></div><span className={`badge ${isDemo ? 'green' : 'neutral'}`}>{isDemo ? 'Demo AI' : system?.mode === 'simulation' ? 'Simulation' : system?.mode === 'calibration' ? 'Calibration' : system?.mode === 'vision' ? 'Vision' : '—'}</span></div>
           <div className="policy-control"><span>Алгоритм</span><div className="segmented policy"><button className={policy === 'fixed' ? 'selected' : ''} disabled={busy || !safe || system?.mode === 'calibration'} onClick={() => selectPolicy('fixed')}><Gauge size={14}/>Fixed-Time</button><button className={policy === 'adaptive' ? 'selected ai-selected' : ''} disabled={busy || !safe || system?.mode === 'calibration'} onClick={() => selectPolicy('adaptive')}><Sparkles size={14}/>Smart AI</button></div></div>
-        </div>
+        </div> : null}
 
-        {!safe ? <div className="status-banner" role="status"><Unplug size={18}/><span>{snapshot?.failure ? `Контроллер остановлен: ${snapshot.failure}. Перезапустите источник.` : state.error ?? 'Ожидаем свежие данные backend. Сигналы скрыты до подтверждения связи и готовности.'}</span><button onClick={() => setDialog('settings')}>Подключение<ChevronRight size={14}/></button></div> : null}
-        {snapshot?.emergency ? <div className="priority-banner"><Zap size={17}/><span>Экстренный приоритет: {phaseNames[snapshot.emergency]}. Переход выполняет Safety Controller.</span><button disabled={busy} onClick={() => void act(() => request('/api/v1/emergency', 'DELETE'), 'Приоритет отменён')}>Отменить</button></div> : null}
+        {!isVideo && !safe ? <div className="status-banner" role="status"><Unplug size={18}/><span>{snapshot?.failure ? `Контроллер остановлен: ${snapshot.failure}. Перезапустите источник.` : state.error ?? 'Ожидаем свежие данные backend. Сигналы скрыты до подтверждения связи и готовности.'}</span><button onClick={() => setDialog('settings')}>Подключение<ChevronRight size={14}/></button></div> : null}
+        {!isVideo && snapshot?.emergency ? <div className="priority-banner"><Zap size={17}/><span>Экстренный приоритет: {phaseNames[snapshot.emergency]}. Переход выполняет Safety Controller.</span><button disabled={busy} onClick={() => void act(() => request('/api/v1/emergency', 'DELETE'), 'Приоритет отменён')}>Отменить</button></div> : null}
         {error ? <div className="error-banner" role="alert">{error}<button onClick={() => setError('')}>Закрыть</button></div> : null}
 
         <Suspense fallback={<div className="empty">Загружаем раздел…</div>}>
-          {page === 'intelligence' ? <Intelligence/> : page === 'overview' ? <Overview snapshot={snapshot} system={system} safe={safe} history={state.history} events={state.events} onEmergency={() => setDialog('emergency')}/> : page === 'comparison' ? <Comparison/> : page === 'analytics' ? <Analytics snapshot={snapshot}/> : <Calibration system={system}/>}
+          {page === 'video' ? <VideoAnalysis/> : page === 'operations' ? <Operations/> : page === 'intelligence' ? <Intelligence/> : page === 'overview' ? <Overview snapshot={snapshot} system={system} safe={safe} history={state.history} events={state.events} onEmergency={() => setDialog('emergency')}/> : page === 'comparison' ? <Comparison/> : page === 'analytics' ? <Analytics snapshot={snapshot}/> : <Calibration system={system}/>}
         </Suspense>
-        <footer className="page-footer"><span><ShieldCheck size={14}/>Vision наблюдает. Decision решает. Safety разрешает.</span><span>Smart Traffic AI · {isDemo ? 'presentation demo' : 'real backend'}</span></footer>
+        <footer className="page-footer"><span><ShieldCheck size={14}/>{isVideo ? 'Vision обнаруживает. Tracking сопоставляет. Отчёт сохраняет.' : 'Vision наблюдает. Decision решает. Safety разрешает.'}</span><span>Smart Traffic AI · {isVideo ? 'recorded video analysis' : isDemo ? 'presentation demo' : 'real backend'}</span></footer>
       </main>
     </div>
 

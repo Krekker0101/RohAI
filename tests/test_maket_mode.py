@@ -15,7 +15,7 @@ from pydantic import ValidationError
 from smart_traffic_backend.maket.app import create_maket_app
 from smart_traffic_backend.maket.config import MaketCalibration, MaketConfig, MaketScaleConfig
 from smart_traffic_backend.maket.metrics import MaketEvents
-from smart_traffic_backend.maket.policy import CameraPolicy, approved_stand_release
+from smart_traffic_backend.maket.policy import CameraPolicy, approved_stand_release, request
 from smart_traffic_backend.maket.runtime import MaketRuntime
 from smart_traffic_backend.maket.serial import MASKS, Esp32TrafficLightController, checksum
 from traffic_core.models import Direction, ObjectKind, ObservationEvidence
@@ -283,6 +283,78 @@ def test_shadow_uses_real_camera_contract_not_truth() -> None:
     frame = policy.stack.frames[-1]
     assert frame.physical("north.queue_length_m") is None
     assert frame.physical("north.queue_count") == 1
+
+
+@pytest.mark.parametrize("age", [1.0, 9.0])
+def test_camera_actuated_responds_to_queues_after_minimum_green(age: float) -> None:
+    from traffic_core.models import Phase, SignalStage
+    from traffic_simulator.twin_models import ObservedTrafficState
+
+    analyzer = TrafficAnalyzer(
+        load_geometry(Path("configs/maket/geometry-draft.json")),
+        AnalyticsSettings(coordinate_domain="maket_relative"),
+    )
+    for timestamp in (0, 0.1, 0.3, 0.5, 1, 2):
+        result = observed_car(analyzer, timestamp)
+    traffic = analyzer.to_core_state(result)
+    approaches = tuple(
+        approach.model_copy(
+            update={"queue_length": 10 if approach.direction == Direction.EAST else 1}
+        )
+        for approach in traffic.approaches
+    )
+    traffic = traffic.model_copy(update={"simulation_time": age, "approaches": approaches})
+    decisions = {}
+    for name in ("FIXED", "ADAPTIVE", "ACTUATED"):
+        supervisor = SafetySupervisor(config().timing)
+        supervisor.machine.phase = Phase.NS
+        supervisor.machine.stage = SignalStage.GREEN
+        supervisor.machine.entered_at = 0
+        supervisor.machine.green_seconds = 45
+        policy = CameraPolicy(supervisor, None)
+        policy.name = name
+        decision = asyncio.run(policy.decide(traffic))
+        decisions[name] = decision
+        signals = supervisor.apply(
+            request(decision),
+            ObservedTrafficState(source="live_camera_observation", traffic=traffic),
+        )
+        assert signals.stage == (
+            SignalStage.YELLOW if name == "ACTUATED" and age == 9 else SignalStage.GREEN
+        )
+    assert decisions["ADAPTIVE"].phase == decisions["FIXED"].phase == Phase.NS
+    assert decisions["ACTUATED"].phase == (Phase.EW if age == 9 else Phase.NS)
+
+
+def test_actuated_api_retains_camera_only_and_stop_gates(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from smart_traffic_backend.maket.runtime import MaketRuntime
+
+    runtimes: list[MaketRuntime] = []
+
+    async def no_start(self: MaketRuntime) -> None:
+        runtimes.append(self)
+
+    monkeypatch.setattr(MaketRuntime, "start", no_start)
+    monkeypatch.setenv("ROHAI_MAKET_OPERATOR_TOKEN", "unit-fixture-operator-secret")
+    settings = config().model_copy(
+        update={"output_mode": "CAMERA_ONLY", "session_directory": tmp_path / "sessions"}
+    )
+    app = create_maket_app(settings)
+    with TestClient(app) as client:
+        client.headers["X-Operator-Token"] = "unit-fixture-operator-secret"
+        body = {"action": "policy", "policy": "ACTUATED", "policy_mode": "SHADOW"}
+        response = client.post("/api/maket/control", json=body)
+        assert response.status_code == 200, response.text
+        assert response.json()["policy"] == "ACTUATED"
+        assert (
+            client.post("/api/maket/control", json={**body, "policy_mode": "ACTIVE"}).status_code
+            == 409
+        )
+        runtimes[0].demo_running = True
+        assert client.post("/api/maket/control", json=body).status_code == 409
+        runtimes[0].demo_running = False
 
 
 def test_no_port_does_not_create_mock() -> None:

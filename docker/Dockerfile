@@ -9,11 +9,17 @@ FROM python:3.12-slim
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 COPY apps/backend apps/backend
+COPY apps/dashboard/src apps/dashboard/src
 COPY --from=dashboard /dashboard/dist apps/dashboard/dist
 COPY packages packages
+COPY configs configs
+COPY docs docs
+COPY tests/test_maket_hil.py tests/test_maket_hil.py
 RUN pip install --no-cache-dir uv==0.11.14 \
-    && uv sync --locked --no-dev --no-editable --no-cache \
-    && useradd --create-home traffic
+    && uv sync --locked --extra learning --extra pilot --no-dev --no-editable --no-cache \
+    && useradd --create-home traffic \
+    && mkdir -p /app/.runtime /app/artifacts/rohai-ai-2.0/stage3 \
+    && chown -R traffic:traffic /app/.runtime /app/artifacts
 ENV PATH="/app/.venv/bin:$PATH"
 USER traffic
 EXPOSE 8000

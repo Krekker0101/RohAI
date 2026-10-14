@@ -8,7 +8,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Formatting failed' }
     uv run --locked --extra vision --extra control-training mypy
     if ($LASTEXITCODE -ne 0) { throw 'Type checking failed' }
-    uv run --locked --extra vision --extra control-training pytest
+    uv run --locked --extra vision --extra maket --extra control-training pytest --basetemp=.pytest-tmp
     if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
 } finally {
     Pop-Location

@@ -1,0 +1,302 @@
+{
+  "version": "1",
+  "public_only": true,
+  "facts": [
+    {
+      "id": "overview",
+      "title": "Назначение RohAI",
+      "status": "implemented",
+      "keywords": "проект rohai возможности возможност purpose capabilities features функция функц",
+      "simple": "Основные возможности RohAI: 1) анализ записанного видео, 2) симуляция перекрёстка, 3) сравнение алгоритмов управления.",
+      "standard": "Основные возможности RohAI: 1) распознавание и трекинг объектов в записи, 2) симуляция перекрёстка, 3) воспроизводимое сравнение адаптивного и фиксированного управления.",
+      "technical": "RohAI включает: 1) offline-видео через YOLO26 и ByteTrack, 2) SimulationEngine с TrafficController и SafetyController, 3) сравнение AI и Fixed-Time. React/Vite подключён к FastAPI через REST и WebSocket.",
+      "sources": [
+        "README.md",
+        "apps/backend/src/smart_traffic_backend/main.py",
+        "packages/traffic_core/src/traffic_core/controller.py"
+      ],
+      "english": "RohAI has three main capabilities: 1) recorded-video detection and tracking, 2) intersection simulation with a separate safety controller, 3) reproducible adaptive versus Fixed-Time comparisons. React/Vite connects to FastAPI through REST and WebSocket.",
+      "references": [
+        "video",
+        "demo",
+        "comparison"
+      ]
+    },
+    {
+      "id": "video",
+      "title": "Импорт видео",
+      "status": "implemented",
+      "keywords": "видео импорт загруз запись файл video upload recording камера camera",
+      "simple": "Откройте «Анализ видео», выберите запись и режим, затем нажмите «Загрузить и анализировать». Камера и ESP32 не нужны.",
+      "standard": "Все кадры записи обрабатываются последовательно. Панель показывает прогресс, рамки, ID и траектории; доступны отмена задачи и JSON-отчёт.",
+      "technical": "POST /api/v1/video/jobs принимает тело видео и параметры filename, profile, roads. Отдельный процесс последовательно обрабатывает все кадры; время определяется индексом кадра и FPS источника.",
+      "sources": [
+        "apps/backend/src/smart_traffic_backend/video_analysis.py",
+        "apps/backend/src/smart_traffic_backend/video_worker.py",
+        "apps/dashboard/src/features/VideoAnalysis.tsx"
+      ],
+      "english": "Open Video Analysis, choose a recorded file and recognition profile, then upload it. All frames are processed sequentially. Progress, boxes, track IDs, cancellation and a JSON report are available; no camera or ESP32 is needed."
+    },
+    {
+      "id": "aerial",
+      "title": "Маленькие машины с дрона",
+      "status": "experimental",
+      "keywords": "дрон дальн малень мелк aerial small distance плитк тайл поворот precise",
+      "simple": "Для маленьких машин выберите «Дрон / дальний транспорт». Дополнительная проверка поворотов анализирует также изображение, повёрнутое на 90°, и объединяет обнаружения; направление движения этим не измеряется. Этот режим работает дольше. Повышение точности дополнительного повёрнутого прохода не измерено.",
+      "standard": "YOLO26s проверяет перекрывающиеся участки, объединяет дубли и сопровождает транспорт общим ByteTrack. Мелкие машины могут пропускаться или распознаваться неверно.",
+      "technical": "Плитка по умолчанию 1024 пикселя, перекрытие 0.2, вход модели 640. Для 3840×2160 aerial выполняет 15 проверок; aerial_precise добавляет повёрнутый проход. Глобальный NMS объединяет дубли транспорта.",
+      "sources": [
+        "packages/vision/src/traffic_vision/aerial.py",
+        "packages/vision/src/traffic_vision/settings.py",
+        "docs/AERIAL_VIDEO.md"
+      ],
+      "english": "Aerial modes use YOLO26s on overlapping image tiles, global duplicate removal and ByteTrack. The precise mode adds a rotated pass. Small-vehicle recognition is experimental and can miss or misclassify objects."
+    },
+    {
+      "id": "roads",
+      "title": "Подсветка дороги",
+      "status": "experimental",
+      "keywords": "дорог асфальт маск выдел подсвет сегмент road segmentation roof дом крыш",
+      "simple": "Перед загрузкой включите «Подсвечивать дороги». Голубая маска показывает предполагаемую дорогу, но может ошибаться.",
+      "standard": "NVIDIA SegFormer-B0 / Cityscapes предсказывает класс дороги. Отдельная эвристика RohAI уточняет асфальт и небольшие разрывы маски после работы нейросети; пробелы не являются отдельным классом SegFormer. Маска экспериментальная, без подтверждённой пиксельной точности.",
+      "technical": "Класс road применяется с вероятностью не ниже 0.35. Aerial-эвристика выбирает связную поверхность с нейросетевым семенем, ограниченно расширяет её и сохраняет крупные островки. На предоставленном видео новые веса не обучались.",
+      "sources": [
+        "packages/vision/src/traffic_vision/roads.py",
+        "docs/ROAD_OVERLAY.md"
+      ],
+      "english": "Enable road highlighting before uploading. NVIDIA SegFormer-B0 / Cityscapes supplies the neural road mask. Aerial footage also uses a bounded surface heuristic. Edges can be wrong; the uploaded recording was not used to train new weights."
+    },
+    {
+      "id": "speed",
+      "title": "Скорость анализа",
+      "status": "implemented",
+      "keywords": "медлен быстр ускор скорость скорост cpu gpu cuda fps latency performance",
+      "simple": "В режиме «Дрон» нейросеть проверяет несколько участков каждого кадра вместо одной проверки в обычном режиме; дополнительные проверки увеличивают время обработки. CPU не гарантирует реальное время.",
+      "standard": "Offline-aerial использует до 6 потоков CPU, не больше половины логических процессоров. Превью рисуется в ширине до 1280 пикселей; все кадры и исходная детализация распознавания сохраняются.",
+      "technical": "STA_VIDEO_CPU_THREADS задаёт бюджет CPU. В отчёте performance разделяет detection_seconds, road_seconds и preview_seconds_including_roads. Последнее уже включает дорогу. FPS измеряется, а обработка в реальном времени не обещается.",
+      "sources": [
+        "apps/backend/src/smart_traffic_backend/video_worker.py",
+        "apps/backend/src/smart_traffic_backend/config.py",
+        "docs/ROAD_OVERLAY.md"
+      ],
+      "english": "Offline aerial processing uses up to 6 CPU threads, limited to half the logical processors, and renders previews at up to 1280 pixels. All original frames and detection resolution remain intact. CPU processing is not guaranteed to run in real time."
+    },
+    {
+      "id": "tracking",
+      "title": "ID и траектории",
+      "status": "implemented",
+      "keywords": "трек track id рамк траектор bbox сопровожд обнаруж машин confidence уверенн",
+      "simple": "Рамка показывает найденный объект. ID связывает наблюдения, а линия показывает его движение.",
+      "standard": "YOLO26 находит объекты, ByteTrack связывает их в треки. ID может теряться. Уверенность модели не равна проверенной точности; скорость изображения не равна километрам в час.",
+      "technical": "frames.jsonl сохраняет bbox, confidence и track_id. В aerial единый BYTETracker применяется после глобального объединения плиток. Скорость записывается в пикселях в секунду; без геометрической калибровки это не км/ч.",
+      "sources": [
+        "packages/vision/src/traffic_vision/detector.py",
+        "packages/vision/src/traffic_vision/aerial.py",
+        "apps/backend/src/smart_traffic_backend/video_worker.py"
+      ],
+      "english": "YOLO26 detects objects and ByteTrack associates them across frames. Boxes show observations, IDs identify tracks, and trails show movement. Confidence is not independently measured accuracy. Image speed is pixels per second, not kilometres per hour."
+    },
+    {
+      "id": "report",
+      "title": "Отчёт по видео",
+      "status": "implemented",
+      "keywords": "отчёт отчет report export экспорт json хеш hash результат наблюден процент",
+      "simple": "После завершения скачайте JSON-отчёт с кадрами, моделью, наблюдениями и временем обработки.",
+      "standard": "Отчёт содержит SHA-256 входного видео и детектора, количество кадров и тайминги. Число треков не равно проверенному потоку; процент маски не является точностью.",
+      "technical": "GET /api/v1/video/jobs/{id}/report выдаёт отчёт завершённой задачи. Schema 1.0 содержит dropped_frames, inference_p50_ms, inference_p95_ms и ограничения. queue_mae и road_delay_seconds не заявляют измеренную точность или выигрыш.",
+      "sources": [
+        "apps/backend/src/smart_traffic_backend/video_worker.py",
+        "apps/backend/src/smart_traffic_backend/video_analysis.py"
+      ],
+      "english": "The completed JSON report records input and detector hashes, processed frames, observations and timings. Track counts are not calibrated traffic flow. Road-mask coverage is not segmentation accuracy."
+    },
+    {
+      "id": "demo",
+      "title": "DEMO и REAL",
+      "status": "implemented",
+      "keywords": "demo демо real реальн презентац синтет simulation симуляц",
+      "simple": "DEMO показывает синтетический поток для презентации. REAL читает выбранный backend. Демо не доказывает точность настоящей камеры.",
+      "standard": "DEMO использует настоящую логику simulation/control/safety с синтетическими наблюдениями и без физического адаптера. REAL может работать в simulation, calibration или vision.",
+      "technical": "Endpoints /api/v1/demo/system и /api/v1/demo/state отделены от обычных /api/v1/system и /api/v1/state. Пилот получает только раздел и режим DEMO/REAL, без закрытой телеметрии.",
+      "sources": [
+        "apps/backend/src/smart_traffic_backend/demo_runtime.py",
+        "apps/dashboard/src/data/source.ts",
+        "README.md"
+      ],
+      "english": "DEMO uses synthetic observations with the real simulation control and safety logic, without physical hardware. REAL reads the selected backend, which may run simulation, calibration or vision. Demo results do not prove field detection accuracy."
+    },
+    {
+      "id": "control",
+      "title": "Управление фазами",
+      "status": "implemented",
+      "keywords": "светофор фаз зелен красн signal phase fixed adaptive алгоритм управлен",
+      "simple": "В симуляции доступны фиксированное время и адаптивный алгоритм. Переходы проверяет отдельный слой безопасности.",
+      "standard": "Fixed-Time использует заранее фиксированное зелёное время, независимо от спроса. Отдельный адаптивный алгоритм меняет зелёное время по спросу в заданных пределах. Анализ файла не управляет настоящими светофорами.",
+      "technical": "TrafficController выбирает ограниченный green_seconds. SafetyController сохраняет жёлтый и all-red перед сменой конфликтующих фаз. Пилот не вызывает control, emergency и аппаратные команды.",
+      "sources": [
+        "packages/traffic_core/src/traffic_core/controller.py",
+        "packages/traffic_core/src/traffic_core/safety.py",
+        "apps/backend/src/smart_traffic_backend/video_worker.py"
+      ],
+      "english": "Fixed-Time uses fixed green durations; the adaptive controller derives bounded durations from demand. The safety controller preserves yellow and all-red transitions. Uploaded-video analysis does not actuate real signals."
+    },
+    {
+      "id": "lights",
+      "title": "Цвет светофора в видео",
+      "status": "unconfirmed",
+      "keywords": "цвет светофор видео красный жёлтый желтый зелёный зеленый lamp recognize",
+      "simple": "Распознавание цвета настоящего светофора в загруженном видео пока не подтверждено. Сигналы DEMO относятся к симуляции.",
+      "standard": "Offline-видео распознаёт транспорт и экспериментально выделяет дорогу. Проверенного классификатора красного, жёлтого и зелёного света в этом пути нет.",
+      "technical": "AerialDetector оставляет CAR, TRUCK, BUS, MOTORCYCLE и BICYCLE. Video worker не определяет состояние реальной сигнальной головки; фазы симуляции не доказывают распознавание цвета.",
+      "sources": [
+        "packages/vision/src/traffic_vision/aerial.py",
+        "apps/backend/src/smart_traffic_backend/video_worker.py"
+      ],
+      "english": "Recognizing the actual red, yellow or green light in an uploaded recording is not verified in this implementation. The aerial detector selects vehicle classes. Signals shown in DEMO describe simulation phases."
+    },
+    {
+      "id": "calibration",
+      "title": "Калибровка ROI",
+      "status": "implemented",
+      "keywords": "roi калибр геометр зон calibration stop line стоп",
+      "simple": "Калибровка задаёт зоны камеры, направления и очереди. Для новой камеры геометрию нужно проверить.",
+      "standard": "«Калибровка ROI» редактирует геометрию области наблюдения, полос, очередей и стоп-линий. Она важна для привязки треков и измерений.",
+      "technical": "IntersectionGeometry и GeometryStore проверяют конфигурацию камеры. Геометрия хранится отдельно от весов модели. Offline-загрузка автоматически не создаёт проверенную дорожную калибровку.",
+      "sources": [
+        "apps/dashboard/src/features/Calibration.tsx",
+        "packages/vision/src/traffic_vision/geometry.py"
+      ],
+      "english": "ROI calibration defines camera observation areas, lane regions, queues and stop lines. Geometry is separate from model weights and must be checked for each camera. Offline uploads do not automatically establish validated road calibration."
+    },
+    {
+      "id": "analytics",
+      "title": "Аналитика и графики",
+      "status": "implemented",
+      "keywords": "график chart аналитик analytics метрик throughput ожидание очередь kpi",
+      "simple": "Аналитика показывает этапы обработки, треки и KPI симуляции. Назовите заголовок графика, чтобы уточнить объяснение.",
+      "standard": "Здесь отображаются FPS и задержка pipeline, количество захваченных и обработанных кадров, треки и KPI симуляции. В DEMO данные синтетические.",
+      "technical": "Analytics.tsx выводит captured, inferred, analyzed, published, processing_fps, latency_ms и до 200 треков. Пилот не получает текущие значения графиков или закрытую телеметрию.",
+      "sources": [
+        "apps/dashboard/src/features/Analytics.tsx"
+      ],
+      "english": "Analytics displays pipeline frame counts, FPS, latency, tracks and simulation KPIs. DEMO data is synthetic. Name a chart to identify it; Pilot does not receive its current private values."
+    },
+    {
+      "id": "comparison",
+      "title": "Сравнение алгоритмов",
+      "status": "implemented",
+      "keywords": "сравнен comparison comparative benchmark выигрыш преимущество эффективность ai fixed time",
+      "simple": "AI vs Fixed-Time сравнивает алгоритмы в выбранной симуляции. Это не доказательство выигрыша на настоящей дороге.",
+      "standard": "Сравнение воспроизводимо для заданного сценария и seed. Ожидание и пропускная способность относятся к этому сценарию; полевое преимущество требует отдельных испытаний.",
+      "technical": "POST /api/v1/simulation/compare принимает ComparisonRequest. Детерминированная симуляция использует выбранные интенсивности и длительность. Полевой выигрыш требует независимой разметки и пилота.",
+      "sources": [
+        "packages/simulator/src/traffic_simulator/comparison.py",
+        "apps/dashboard/src/features/Comparison.tsx"
+      ],
+      "english": "AI vs Fixed-Time compares algorithms reproducibly in a selected simulation scenario and seed. Waiting and throughput results apply to that scenario; field improvements require independent observations and trials."
+    },
+    {
+      "id": "safety",
+      "title": "Безопасность и ESP32",
+      "status": "partial",
+      "keywords": "esp32 оборудован аппарат safety безопас аварий emergency priority",
+      "simple": "Пилот только объясняет RohAI. Он не включает светофоры и не отправляет команды ESP32.",
+      "standard": "Safety-логика существует, но физическая дорожная активация требует отдельных аппаратных проверок и допуска. Код не означает пройденные испытания.",
+      "technical": "Safety отделяет предложение решения от разрешения перехода. HIL-тесты требуют реального ESP32. Offline-видео сохраняет physical_execution=false и не открывает камеру или физический контроллер.",
+      "sources": [
+        "apps/backend/src/smart_traffic_backend/safety_architecture.py",
+        "tests/test_maket_hil.py",
+        "apps/backend/src/smart_traffic_backend/video_worker.py"
+      ],
+      "english": "Pilot is read-only: it never switches signals or sends ESP32 commands. Safety logic exists, but physical activation requires separate hardware checks. Real ESP32 HIL tests require actual hardware and are not replaced by mocks."
+    },
+    {
+      "id": "auth",
+      "title": "Доступ и приватность",
+      "status": "implemented",
+      "keywords": "токен token секрет ключ auth авторизац доступ privacy приват история микрофон",
+      "simple": "Диалог временный, микрофон включается по вашему нажатию. Аудио обрабатывается локально и не пишется на диск.",
+      "standard": "Пилот использует опубликованные сведения, существующие viewer/operator права или локальный доступ без токена. Секреты и закрытая телеметрия не передаются в базу знаний.",
+      "technical": "Pilot API проверяет loopback и Origin без токена, иначе X-Operator-Token. Сессии ограничены TTL и числом, привязаны к владельцу и очищаются по запросу. Модели работают в отдельном процессе.",
+      "sources": [
+        "apps/backend/src/smart_traffic_backend/pilot.py",
+        "apps/backend/src/smart_traffic_backend/main.py"
+      ],
+      "english": "Pilot uses public project facts and local inference, recognition and synthesis. Sessions are temporary, owner-bound and clearable. Microphone capture starts only after user action. Audio is not written to disk, and secret configuration is excluded."
+    },
+    {
+      "id": "training",
+      "title": "Обучение и точность",
+      "status": "unconfirmed",
+      "keywords": "обуч train точност accuracy faang стартап startup готовн надёж надеж размет",
+      "simple": "Используются предобученные модели. На вашем ролике новые веса не обучались; независимая точность не измерена.",
+      "standard": "Для дообучения нужны проверенные рамки или маски и отдельные записи для оценки. Разметки предоставленного видео пока нет.",
+      "technical": "Confidence, доля маски и количество треков не заменяют precision/recall или IoU на независимой разметке. Короткий acceptance-прогон подтверждает выполнение пути, а не полевую точность или коммерческую готовность.",
+      "sources": [
+        "docs/AERIAL_VIDEO.md",
+        "docs/ROAD_OVERLAY.md"
+      ],
+      "english": "The detector and segmenter are pretrained. The provided recording has no independent annotations, and new weights were not trained on it. Precision, recall and road IoU require verified labels and separate evaluation recordings."
+    },
+    {
+      "id": "intelligence",
+      "title": "RohAI AI 2.0",
+      "status": "partial",
+      "keywords": "ai 2.0 intelligence shadow интеллект модель релиз rollback обучаем политик",
+      "simple": "AI 2.0 показывает подготовку моделей, проверку релизов и observation-only Shadow. Это не разрешение управлять дорогой.",
+      "standard": "Раздел содержит артефакты обучения, модельные пакеты, версии и Shadow. Наличие конкретной модели зависит от установки и успешной проверки.",
+      "technical": "AIService и registry отделены от runtime safety. Shadow оценивает предложения без физического исполнения. Пилот не запускает обучение, rollout или изменение production selection.",
+      "sources": [
+        "apps/backend/src/smart_traffic_backend/ai.py",
+        "apps/dashboard/src/features/Intelligence.tsx"
+      ],
+      "english": "RohAI AI 2.0 includes training artifacts, model package validation, versioning and observation-only Shadow. Actual availability depends on installed validated artifacts. Pilot does not train models or change production selections."
+    },
+    {
+      "id": "operations",
+      "title": "Отчёты пилота",
+      "status": "partial",
+      "keywords": "operations пилот отчёт csv доступност availability наблюдения site период",
+      "simple": "Отчёты пилота собирают наблюдения за период, если Operations отдельно настроен.",
+      "standard": "Operations сохраняет наблюдения в SQLite и выдаёт JSON/CSV с правами viewer/operator. Отчёты не подтверждают клиентскую приёмку или полевые испытания.",
+      "technical": "STA_OPERATIONS_ENABLED включает PilotOperations с ограниченным хранением. Viewer читает отчёты, operator имеет отдельные права. Пилот не читает закрытую базу наблюдений.",
+      "sources": [
+        "apps/backend/src/smart_traffic_backend/operations.py",
+        "docs/pilot/RUNBOOK.md"
+      ],
+      "english": "Operations reports require separate configuration and provide stored observations with viewer/operator access. Reports do not prove customer acceptance or field trials. Pilot does not read the private observation database."
+    },
+    {
+      "id": "errors",
+      "title": "Ошибки анализа",
+      "status": "implemented",
+      "keywords": "ошиб error failed журнал лог не удалось cancel отмен",
+      "simple": "При failed проверьте журнал ошибки задачи, устраните указанную причину или попробуйте загрузить файл заново. Отмена предназначена для ещё выполняющихся задач, а не для уже завершённых с ошибкой.",
+      "standard": "Сбой не создаёт успешный отчёт. Временная блокировка файла превью может пропустить обновление без остановки распознавания.",
+      "technical": "run_video_job сохраняет worker-error.txt и failed. publish_preview повторяет атомарную замену при Windows PermissionError. KeyboardInterrupt при обычном Ctrl+C завершении не доказывает сбой модели.",
+      "sources": [
+        "apps/backend/src/smart_traffic_backend/video_analysis.py",
+        "apps/backend/src/smart_traffic_backend/video_worker.py",
+        "apps/backend/src/smart_traffic_backend/video_cli.py"
+      ],
+      "english": "For a failed video job, inspect its error log and correct the reported cause before retrying the upload. Cancellation is for active jobs. A failed job does not create a successful report."
+    },
+    {
+      "id": "pilot",
+      "title": "Голос Пилота",
+      "status": "implemented",
+      "keywords": "pilot пилот assistant помощник voice голос язык speak звук рот микрофон whisper piper qwen",
+      "simple": "Локальная языковая модель формулирует текст ответа по источникам проекта. Piper превращает этот текст в речь. Готовые бесшумные видео задают движения тела; отдельно рисуемый рот следует воспроизводимому звуку.",
+      "standard": "Локальная модель на CPU генерирует новый ответ по найденным публичным источникам. Whisper распознаёт голос, Piper озвучивает по-русски и по-английски. Три бесшумных анимации тела переключаются по состоянию диалога; отдельный рот следует амплитуде воспроизводимого PCM. Проверенной таджикской модели пока нет.",
+      "technical": "Сервер проверяет допустимые ID источников и сгенерированный текст. TTS возвращает поток PCM; Web Audio AnalyserNode управляет ртом на Canvas. Подготовленные MP4 содержат только видео, а покадровая геометрия рта задаётся в animations.json. Текст и звук не встроены в анимации тела.",
+      "sources": [
+        "apps/backend/src/smart_traffic_backend/pilot.py",
+        "apps/backend/src/smart_traffic_backend/pilot_model.py",
+        "apps/dashboard/src/features/pilot/Voice.ts",
+        "apps/dashboard/src/features/pilot/VideoAvatar.tsx",
+        "apps/backend/src/smart_traffic_backend/pilot_llama.py"
+      ],
+      "english": "Pilot uses a local CPU model to generate new answers from retrieved public evidence. Whisper handles speech input and Piper speaks Russian or English. Silent body clips follow dialogue state; a separate mouth follows the RMS of actual PCM playback. Tajik speech support is not verified."
+    }
+  ]
+}

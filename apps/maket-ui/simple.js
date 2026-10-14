@@ -1,10 +1,15 @@
 import {overlayState, liveGeometry, frameTracks} from './overlay.js';
+import {displayedSignal} from './signals.js';
 import {connectLocal,authorizeSetup,canConfigure,canDiscoverAutomatically,confirmPhysical,publicError} from './workspace.js';
 const $=id=>document.getElementById(id);
 const canvas=$('video'),ctx=canvas.getContext('2d'),directions=['north','south','east','west'];
 let config,geometry,state,bitmap,bitmapAt=0,connected=false,pollBusy=false,frameBusy=false,editing=false,newPoints=null,drag=null,setupBusy=false;
 let frameContext=null, anchorMode=false, autoSuggestedKey=null;
 const reviewed=new Set();
+const strategy=document.createElement('select');strategy.id='camera-strategy';strategy.setAttribute('aria-label','Стратегия рекомендаций');
+for(const [value,name] of [['ADAPTIVE','Adaptive · длительность по нагрузке'],['ACTUATED','Actuated · выбор по очередям'],['FIXED','Fixed · фиксированный цикл']]){const option=document.createElement('option');option.value=value;option.textContent=name;strategy.append(option);}
+const strategyLabel=document.createElement('label');strategyLabel.append('Стратегия рекомендаций ',strategy);document.querySelector('.workspace-controls').append(strategyLabel);
+strategy.onchange=async()=>{strategy.disabled=true;try{await authorizeSetup(api);state=await api('control','POST',{action:'policy',policy:strategy.value,policy_mode:'SHADOW'});render();}catch(e){error(e);}finally{strategy.disabled=!!(state?.running||state?.demo_running);}};
 const copy=x=>structuredClone(x);
 const text=x=>x===null||x===undefined?'—':String(x);
 let prefs={};try{prefs=JSON.parse(localStorage.getItem('rohai-ui')??'{}');}catch{}
@@ -40,16 +45,21 @@ function render(){
  const group=(a,b)=>[m[a],m[b]].every(v=>typeof v?.queue_count==='number')?m[a].queue_count+m[b].queue_count:null;
  const oldest=(a,b)=>[m[a],m[b]].every(v=>typeof v?.max_wait_seconds==='number')?Math.max(m[a].max_wait_seconds,m[b].max_wait_seconds).toFixed(0):'—';
  $('factors').textContent=`${proposal?.reason?proposal.reason+' · ':''}Измерения: очередь EW ${text(group('east','west'))}, NS ${text(group('north','south'))}. Старейшее ожидание EW ${oldest('east','west')}s, NS ${oldest('north','south')}s.`;
- const ready=state.readiness??{};const checks=[['Камера',state.camera_connection==='CONNECTED'],['AI Vision',ready.VISION_READY],['Контроллер',state.demo_running]];
+ const ready=state.readiness??{};const checks=[['Камера',state.camera_connection==='CONNECTED'],['AI Vision',ready.VISION_READY],['Контроллер',state.demo_running||state.running]];
+ const preflight=state.preflight??{};
+ const preparation=[['camera_healthy','Камера передаёт кадры'],['model_compatible','Модель распознавания доступна'],['calibration_complete','Все направления, полосы и линии размечены'],['calibration_valid','Положение камеры и эталон подтверждены'],['observation_fresh','Кадры свежие'],['analytics_healthy','Измерения всех направлений доступны'],['controller_loaded','Контроллер доступен']];
+ $('control-checklist').replaceChildren(...preparation.map(([key,label])=>{const item=document.createElement('li');const ok=preflight[key]===true;item.textContent=(ok?'✓ ':'○ ')+label+(ok?' — готово':' — требуется проверка');return item;}));
  $('system').replaceChildren(...checks.map(([label,ok])=>{const span=document.createElement('span'),dot=document.createElement('i');dot.className='dot'+(ok?' ok':'');span.append(dot,label);return span;}));
  let message=ready.CONTROL_READY?(state.output_mode==='PHYSICAL_OUTPUT'?(ready.HARDWARE_READY?'Готов к подтверждению физического старта':'Vision готов · аппаратные проверки не пройдены'):'REAL VISION готов ✓'):!state.preflight?.model_compatible?'Модель AI недоступна':state.camera_connection!=='CONNECTED'?'Камера недоступна':!state.preflight?.calibration_valid||!state.preflight?.calibration_complete?'Требуется калибровка':'Ожидаем свежие измерения';
  if(state.camera_revalidation_required||String(state.calibration_status).startsWith('INVALID')||String(state.calibration_status).startsWith('SUSPECT'))message='Положение камеры не подтверждено — проверьте калибровку.';
- $('ready').textContent=message;$('calibration-open').hidden=state.camera_connection!=='CONNECTED'||state.demo_running;
+ $('ready').textContent=message;$('calibration-open').hidden=state.camera_connection!=='CONNECTED'||state.demo_running||state.running;
  const activeControl=state.running||state.demo_running;
+ strategy.disabled=!!activeControl||state.output_mode!=='CAMERA_ONLY';if(['FIXED','ADAPTIVE','ACTUATED'].includes(state.policy))strategy.value=state.policy;
  $('main-action').textContent=activeControl?'ОСТАНОВИТЬ':'НАЧАТЬ';$('main-action').classList.toggle('stopping',!!activeControl);
  $('main-action').disabled=setupBusy||(!activeControl&&(!ready.CONTROL_READY||(state.output_mode==='PHYSICAL_OUTPUT'&&!ready.HARDWARE_READY)));
- const virtual=state.virtual_signal_state;const lights=$('lights');lights.replaceChildren(...directions.map((d,i)=>{const el=document.createElement('div');el.className='signal';el.append(['N','S','E','W'][i]);const prefix=i<2?'NS':'EW';for(const c of ['red','yellow','green']){const lamp=document.createElement('i');const on=virtual&&(c==='red'?!virtual.startsWith(prefix):virtual===prefix+'_'+c.toUpperCase());lamp.className='lamp '+c+(on?' on':'');el.append(lamp);}return el;}));
- lights.setAttribute('aria-label',virtual?'Виртуальное состояние '+virtual:'Виртуальное состояние недоступно');
+ const shown=displayedSignal(state),virtual=shown.phase;const lights=$('lights');lights.replaceChildren(...directions.map((d,i)=>{const el=document.createElement('div');el.className='signal';el.append(['N','S','E','W'][i]);const prefix=i<2?'NS':'EW';for(const c of ['red','yellow','green']){const lamp=document.createElement('i');const on=virtual&&(c==='red'?!virtual.startsWith(prefix):virtual===prefix+'_'+c.toUpperCase());lamp.className='lamp '+c+(on?' on':'');el.append(lamp);}return el;}));
+ lights.setAttribute('aria-label',virtual?(shown.source==='virtual'?'Виртуальное состояние ':'Подтверждено ESP32: ')+virtual:'Состояние светофоров недоступно');
+ const lightTitle=lights.previousElementSibling;lightTitle.firstChild.textContent=shown.source==='virtual'?'Виртуальные светофоры ':'Состояние ESP32 ';lightTitle.querySelector('.badge').textContent=shown.source==='virtual'?'PREVIEW':virtual?'ACK':'НЕТ СВЕЖЕГО ACK';
  $('physical').textContent=state.hardware?.connected?'PHYSICAL CONNECTED · ACK не доказывает свечение ламп':'Физические лампы не подключены';
  if(!editing&&connected){$('wizard').hidden=!!ready.CONTROL_READY||state.demo_running;}
  const valid=!!liveGeometry(state,canvas.width,canvas.height);

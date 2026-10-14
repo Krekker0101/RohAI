@@ -10,7 +10,11 @@ import numpy as np
 from traffic_core.models import Decision, TrafficState
 from traffic_simulator.learning.contracts import ControlRequest
 from traffic_simulator.learning.observation import ObservationStack, encode
-from traffic_simulator.learning.policy import CurrentAdaptiveController, FixedTimeController
+from traffic_simulator.learning.policy import (
+    ActuatedController,
+    CurrentAdaptiveController,
+    FixedTimeController,
+)
 from traffic_simulator.learning.safety import SafetySupervisor
 from traffic_simulator.twin_models import ObservedTrafficState
 
@@ -73,6 +77,7 @@ class CameraPolicy:
         self.stack = ObservationStack()
         self.fixed = FixedTimeController(supervisor.machine.timing)
         self.adaptive = CurrentAdaptiveController(supervisor.machine.timing)
+        self.actuated = ActuatedController(supervisor.machine.timing)
         self.model = None
         self.model_id: str | None = None
         self.active_approved = False
@@ -112,7 +117,10 @@ class CameraPolicy:
                 raise ValueError("Learned action must be a finite integer")
             request = decode_action(scalar)
         else:
-            policy = self.fixed if self.name == "FIXED" else self.adaptive
+            policies = {"FIXED": self.fixed, "ADAPTIVE": self.adaptive, "ACTUATED": self.actuated}
+            if self.name not in policies:
+                raise ValueError("Invalid camera policy")
+            policy = policies[self.name]
             request = policy.propose(frame, history)
         return Decision(
             phase=request.requested_phase,

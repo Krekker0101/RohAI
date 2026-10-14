@@ -1,0 +1,31 @@
+groups:
+  - name: rohai
+    rules:
+      - alert: RohAIUnavailable
+        expr: up{job="rohai"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: RohAI telemetry is unavailable
+      - alert: RohAIObservationUnavailable
+        expr: rohai_ready == 0
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: RohAI observation is not ready
+      - alert: RohAIStorageFailure
+        expr: rohai_storage_healthy == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: RohAI analytics persistence failed
+      - alert: RohAIHighLatency
+        expr: rohai_latency_ms > 500
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Reported pipeline latency exceeds 500ms

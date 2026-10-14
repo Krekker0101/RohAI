@@ -120,6 +120,7 @@ def test_session_is_invalid_after_process_restart(
     ) as first:
         first.post("/api/maket/session", headers={"Origin": "http://127.0.0.1:8001"})
         cookie = first.cookies.get("rohai_local")
+        assert cookie is not None
     with TestClient(
         create_maket_app(c, local_session=True),
         base_url="http://127.0.0.1:8001",

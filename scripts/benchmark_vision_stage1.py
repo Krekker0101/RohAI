@@ -19,6 +19,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=("fixture", "recorded"), default="fixture")
     parser.add_argument("--seconds", type=float, default=8)
+    parser.add_argument("--torch-threads", type=int, choices=(1, 2, 4, 8), default=2)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if not 1 <= args.seconds <= 60:
@@ -34,7 +35,7 @@ def main() -> None:
             else "configs/cameras/demo.json"
         ),
         device="cpu",
-        torch_threads=2,
+        torch_threads=args.torch_threads,
     )
     source = (
         VideoFileSource(recording, settings.source_id)
