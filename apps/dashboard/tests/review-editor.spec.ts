@@ -29,5 +29,33 @@ test('local annotation editor preserves review status and rejects another record
   await expect(page.locator('#confirmed')).not.toBeChecked();
   data.source_sha256 = 'b'.repeat(64);
   await page.locator('#import').setInputFiles({ name: 'wrong.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(data)) });
-  await expect(page.getByRole('status')).toContainText('Импорт отклонён');
+  await expect(page.locator('#status')).toContainText('Импорт отклонён');
+});
+
+test('zoom and scroll keep annotation coordinates in the original 4K frame', async ({ page }, testInfo) => {
+  const directory = path.resolve('../../artifacts/realtime-video-review');
+  test.skip(!existsSync(path.join(directory, 'annotate.html')), 'Requires prepared original frames');
+  await page.goto(pathToFileURL(path.join(directory, 'annotate.html')).href);
+  await expect(page.locator('canvas')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#zoom').fill('3');
+  await expect(page.locator('#zoom-value')).toHaveText('3×');
+  await page.locator('#image-viewport').evaluate(element => { element.scrollLeft = 400; });
+  const canvas = (await page.locator('canvas').boundingBox())!;
+  const viewport = (await page.locator('#image-viewport').boundingBox())!;
+  const x = viewport.x + viewport.width / 2;
+  const y = viewport.y + 100;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 50, y + 40);
+  await page.mouse.up();
+  const downloadPromise = page.waitForEvent('download');
+  await page.locator('#export').click();
+  const download = await downloadPromise;
+  const exported = testInfo.outputPath('zoom-ui-fixture.json');
+  await download.saveAs(exported);
+  const bbox = JSON.parse(readFileSync(exported, 'utf8')).frames[0].objects[0].bbox;
+  expect(bbox.x1).toBeCloseTo((x - canvas.x) * 3840 / canvas.width, 0);
+  expect(bbox.y1).toBeCloseTo((y - canvas.y) * 2160 / canvas.height, 0);
+  expect(bbox.x2 - bbox.x1).toBeCloseTo(50 * 3840 / canvas.width, 0);
+  expect(bbox.y2 - bbox.y1).toBeCloseTo(40 * 2160 / canvas.height, 0);
 });

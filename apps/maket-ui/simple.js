@@ -1,5 +1,6 @@
 import {overlayState, liveGeometry, frameTracks} from './overlay.js';
 import {displayedSignal} from './signals.js';
+import {pipelineDiagnosis} from './diagnostics.js';
 import {connectLocal,authorizeSetup,canConfigure,canDiscoverAutomatically,confirmPhysical,publicError} from './workspace.js';
 const $=id=>document.getElementById(id);
 const canvas=$('video'),ctx=canvas.getContext('2d'),directions=['north','south','east','west'];
@@ -124,9 +125,9 @@ function workspaceState(){
  $('mode-badge').textContent=state.output_mode==='PHYSICAL_OUTPUT'?'PHYSICAL MAKET':'REAL VISION';$('mode').value=state.output_mode;
  $('connection-badge').textContent=connected?'Backend подключён':'Нет подключения';
  $('safety-badge').textContent=state.connection_lost?'Состояние неизвестно · проверьте макет':state.failure?'SAFE STATE':state.running?'Физическое управление активно':'Физическое управление отключено';
- const h=state.hardware??{};$('phase-state').textContent=`ESP32: ${text(h.ack?.actual_phase)} · ожидает ACK: ${h.command_pending?'да':'нет'} · контроллер: ${state.running||state.demo_running?'активен':'остановлен'} · время фазы: ${state.phase_remaining_seconds==null?'—':state.phase_remaining_seconds.toFixed(1)+' с (оценка контроллера)'}`;
+ const h=state.hardware??{},shown=displayedSignal(state);$('phase-state').textContent=`${shown.source==='virtual'?'Виртуально':'ESP32'}: ${text(shown.phase)}${shown.source==='virtual'?'':` · ожидает ACK: ${h.command_pending?'да':'нет'}`} · контроллер: ${state.running||state.demo_running?'активен':'остановлен'} · время фазы: ${state.phase_remaining_seconds==null?'—':state.phase_remaining_seconds.toFixed(1)+' с (оценка контроллера)'}`;
  const v=state.vision_state??{};$('confidence').textContent=`Измерения с камеры · достоверность: ${text(v.directions?.length?Math.min(...v.directions.map(d=>d.confidence)).toFixed(2):null)} · свежесть: ${v.fresh?'fresh':'stale/unavailable'} · калибровка: ${text(state.calibration_status)}`;
- const p=state.performance?.rates??{};$('performance').textContent=`Vision: ${text(state.pipeline?.state)} · FPS: ${text(p.inference_fps??state.camera_metadata?.fps)} · значения недоступны до живых измерений`;
+ $('performance').textContent=pipelineDiagnosis(state);
  $('setup-state').textContent=`Автоподготовка: ${state.autosetup?.state??'—'} / ${state.autosetup?.step??'—'}`;
  $('device-state').textContent=`ESP32: ${h.connected?'подключён':'отключён'} · firmware: ${text(h.ack?.firmware_version??state.autosetup?.device?.ack?.firmware_version)} · последнее ACK: ${text(h.ack?.reason)}. ACK не доказывает свечение ламп.`;
  $('issues').replaceChildren(...[...(state.issues??[]),...(state.autosetup?.issues??[])].map(i=>{const li=document.createElement('li');li.textContent=publicError(i);return li;}));
