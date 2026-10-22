@@ -24,7 +24,7 @@ jobs:
       - run: uv run --no-sync ruff format --check .
       - run: uv run --no-sync mypy
       - run: uv run --no-sync pytest --basetemp=.pytest-tmp --junitxml=artifacts/ci/pytest.xml
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: python-evidence
@@ -56,14 +56,14 @@ jobs:
         working-directory: apps/dashboard
       - run: node --test apps/maket-ui/overlay.test.mjs
       - run: uv run --no-sync python scripts/run_workspace_acceptance.py --output artifacts/ci/browser
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: browser-evidence
           path: |
             artifacts/ci/browser/
             apps/dashboard/test-results/
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dashboard-dist
           path: apps/dashboard/dist/
@@ -96,7 +96,7 @@ jobs:
       - run: uv sync --locked
       - run: uv pip install --python .venv/bin/python -r configs/sumo-requirements.txt
       - run: uv run --no-sync python scripts/evaluation/sumo_benchmark.py --output artifacts/ci/sumo --seeds 42 43 --seconds 60
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: sumo-evidence
