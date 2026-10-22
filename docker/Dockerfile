@@ -1,4 +1,4 @@
-FROM node:22-slim AS dashboard
+FROM node:25-slim AS dashboard
 WORKDIR /dashboard
 COPY apps/dashboard/package*.json ./
 RUN npm ci --no-audit --no-fund
