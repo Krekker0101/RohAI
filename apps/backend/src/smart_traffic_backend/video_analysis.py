@@ -20,6 +20,7 @@ from smart_traffic_backend.config import Settings
 TERMINAL = {"completed", "failed", "cancelled"}
 JOB_ID = re.compile(r"^[a-f0-9]{32}$")
 EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 
 def replace_with_retry(temporary: Path, destination: Path) -> None:
@@ -197,8 +198,10 @@ class VideoJobs:
         if self.active_id is not None:
             raise HTTPException(409, "Another video is being analyzed; finish or cancel it first")
         extension = Path(filename).suffix.lower()
-        if extension not in EXTENSIONS:
-            raise HTTPException(415, "Supported formats: MP4, MOV, AVI, MKV, WEBM, M4V")
+        if extension not in EXTENSIONS | IMAGE_EXTENSIONS:
+            raise HTTPException(
+                415, "Supported formats: JPG, JPEG, PNG, BMP, WEBP, MP4, MOV, AVI, MKV, WEBM, M4V"
+            )
         self.root.mkdir(parents=True, exist_ok=True)
         if (
             sum(p.is_dir() and bool(JOB_ID.fullmatch(p.name)) for p in self.root.iterdir())
@@ -220,6 +223,7 @@ class VideoJobs:
             "road_segmentation_requested": roads,
             "runtime_limit_seconds": 7200 if profile == "standard" else 21600,
             "input_name": "source" + extension,
+            "media_kind": "image" if extension in IMAGE_EXTENSIONS else "video",
             "created_at": datetime.now(UTC).isoformat(),
             "status": "uploading",
             "stage": "uploading",
@@ -316,9 +320,9 @@ async def disk_call(function: Callable[..., Any], *arguments: Any) -> Any:
         raise
 
 
-def video_router(access: Callable[..., Any]) -> APIRouter:
+def video_router(access: Callable[..., Any], prefix: str = "/api/v1/video") -> APIRouter:
     router = APIRouter(
-        prefix="/api/v1/video", tags=["offline-video"], dependencies=[Depends(access)]
+        prefix=prefix, tags=["offline-video"], dependencies=[Depends(access)]
     )
 
     @router.get("/capabilities")
@@ -332,7 +336,8 @@ def video_router(access: Callable[..., Any]) -> APIRouter:
             "max_upload_mb": jobs.settings.video_max_upload_mb,
             "max_duration_seconds": jobs.settings.video_max_duration_seconds,
             "max_frames": jobs.settings.video_max_frames,
-            "formats": sorted(EXTENSIONS),
+            "max_image_pixels": 3840 * 2160,
+            "formats": sorted(EXTENSIONS | IMAGE_EXTENSIONS),
             "vision_dependencies_available": available,
             "model_available": jobs.settings.vision.model_path.is_file()
             or jobs.settings.vision.model_package is not None
@@ -358,9 +363,14 @@ def video_router(access: Callable[..., Any]) -> APIRouter:
         roads: bool = Query(default=False),
     ) -> dict[str, Any]:
         media_type = request.headers.get("content-type", "").split(";", 1)[0].lower()
-        if media_type != "application/octet-stream" and not media_type.startswith("video/"):
+        if (
+            media_type != "application/octet-stream"
+            and not media_type.startswith("video/")
+            and not media_type.startswith("image/")
+        ):
             raise HTTPException(
-                415, "Upload the raw video with video/* or application/octet-stream"
+                415,
+                "Upload raw image/video bytes using image/*, video/*, or application/octet-stream",
             )
         if jobs.lock.locked():
             raise HTTPException(409, "Video service busy")
@@ -442,6 +452,11 @@ def video_router(access: Callable[..., Any]) -> APIRouter:
         path = jobs.directory(identifier) / "report.json"
         if not path.is_file() or path.is_symlink():
             raise HTTPException(503, "Report unavailable")
-        return FileResponse(path, media_type="application/json", filename="rohai-video-report.json")
+        filename = (
+            "rohai-image-report.json"
+            if row.get("media_kind") == "image"
+            else "rohai-video-report.json"
+        )
+        return FileResponse(path, media_type="application/json", filename=filename)
 
     return router

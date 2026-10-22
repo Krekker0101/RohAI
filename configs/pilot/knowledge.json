@@ -47,8 +47,7 @@
       "technical": "Плитка по умолчанию 1024 пикселя, перекрытие 0.2, вход модели 640. Для 3840×2160 aerial выполняет 15 проверок; aerial_precise добавляет повёрнутый проход. Глобальный NMS объединяет дубли транспорта.",
       "sources": [
         "packages/vision/src/traffic_vision/aerial.py",
-        "packages/vision/src/traffic_vision/settings.py",
-        "docs/AERIAL_VIDEO.md"
+        "packages/vision/src/traffic_vision/settings.py"
       ],
       "english": "Aerial modes use YOLO26s on overlapping image tiles, global duplicate removal and ByteTrack. The precise mode adds a rotated pass. Small-vehicle recognition is experimental and can miss or misclassify objects."
     },
@@ -61,8 +60,7 @@
       "standard": "NVIDIA SegFormer-B0 / Cityscapes предсказывает класс дороги. Отдельная эвристика RohAI уточняет асфальт и небольшие разрывы маски после работы нейросети; пробелы не являются отдельным классом SegFormer. Маска экспериментальная, без подтверждённой пиксельной точности.",
       "technical": "Класс road применяется с вероятностью не ниже 0.35. Aerial-эвристика выбирает связную поверхность с нейросетевым семенем, ограниченно расширяет её и сохраняет крупные островки. На предоставленном видео новые веса не обучались.",
       "sources": [
-        "packages/vision/src/traffic_vision/roads.py",
-        "docs/ROAD_OVERLAY.md"
+        "packages/vision/src/traffic_vision/roads.py"
       ],
       "english": "Enable road highlighting before uploading. NVIDIA SegFormer-B0 / Cityscapes supplies the neural road mask. Aerial footage also uses a bounded surface heuristic. Edges can be wrong; the uploaded recording was not used to train new weights."
     },
@@ -76,8 +74,7 @@
       "technical": "STA_VIDEO_CPU_THREADS задаёт бюджет CPU. В отчёте performance разделяет detection_seconds, road_seconds и preview_seconds_including_roads. Последнее уже включает дорогу. FPS измеряется, а обработка в реальном времени не обещается.",
       "sources": [
         "apps/backend/src/smart_traffic_backend/video_worker.py",
-        "apps/backend/src/smart_traffic_backend/config.py",
-        "docs/ROAD_OVERLAY.md"
+        "apps/backend/src/smart_traffic_backend/config.py"
       ],
       "english": "Offline aerial processing uses up to 6 CPU threads, limited to half the logical processors, and renders previews at up to 1280 pixels. All original frames and detection resolution remain intact. CPU processing is not guaranteed to run in real time."
     },
@@ -233,10 +230,9 @@
       "standard": "Для дообучения нужны проверенные рамки или маски и отдельные записи для оценки. Разметки предоставленного видео пока нет.",
       "technical": "Confidence, доля маски и количество треков не заменяют precision/recall или IoU на независимой разметке. Короткий acceptance-прогон подтверждает выполнение пути, а не полевую точность или коммерческую готовность.",
       "sources": [
-        "docs/AERIAL_VIDEO.md",
-        "docs/ROAD_OVERLAY.md"
+        "configs/datasets/rohai-draft.json"
       ],
-      "english": "The detector and segmenter are pretrained. The provided recording has no independent annotations, and new weights were not trained on it. Precision, recall and road IoU require verified labels and separate evaluation recordings."
+      "english": "The repository contains an empty rohai-road-cameras draft: it has no sources or frames and is not a usable training release. The detector and segmenter are pretrained. The provided recording has no independent annotations, and new weights were not trained on it. Precision, recall and road IoU require verified labels and separate evaluation recordings."
     },
     {
       "id": "intelligence",
@@ -261,8 +257,7 @@
       "standard": "Operations сохраняет наблюдения в SQLite и выдаёт JSON/CSV с правами viewer/operator. Отчёты не подтверждают клиентскую приёмку или полевые испытания.",
       "technical": "STA_OPERATIONS_ENABLED включает PilotOperations с ограниченным хранением. Viewer читает отчёты, operator имеет отдельные права. Пилот не читает закрытую базу наблюдений.",
       "sources": [
-        "apps/backend/src/smart_traffic_backend/operations.py",
-        "docs/pilot/RUNBOOK.md"
+        "apps/backend/src/smart_traffic_backend/operations.py"
       ],
       "english": "Operations reports require separate configuration and provide stored observations with viewer/operator access. Reports do not prove customer acceptance or field trials. Pilot does not read the private observation database."
     },
@@ -286,17 +281,18 @@
       "title": "Голос Пилота",
       "status": "implemented",
       "keywords": "pilot пилот assistant помощник voice голос язык speak звук рот микрофон whisper piper qwen",
-      "simple": "Локальная языковая модель формулирует текст ответа по источникам проекта. Piper превращает этот текст в речь. Готовые бесшумные видео задают движения тела; отдельно рисуемый рот следует воспроизводимому звуку.",
-      "standard": "Локальная модель на CPU генерирует новый ответ по найденным публичным источникам. Whisper распознаёт голос, Piper озвучивает по-русски и по-английски. Три бесшумных анимации тела переключаются по состоянию диалога; отдельный рот следует амплитуде воспроизводимого PCM. Проверенной таджикской модели пока нет.",
-      "technical": "Сервер проверяет допустимые ID источников и сгенерированный текст. TTS возвращает поток PCM; Web Audio AnalyserNode управляет ртом на Canvas. Подготовленные MP4 содержат только видео, а покадровая геометрия рта задаётся в animations.json. Текст и звук не встроены в анимации тела.",
+      "simple": "????????? ????? ???????? ?? ?????????? ???????. ??? SVG-?????? ????????? ?????; ??? ??????? ??? ???????? ? ???? ??????? ???????????????? ?????.",
+      "standard": "????????? ???????? ?????? ??????????? ?????? ?? ????????? ?????? ???????, ? ????? ?????????? ?????????. ?????? ???????? ?? SVG ? CSS; ??? ????????? ???????? ?????? ? ????????, ? ?? ????? ???? ???????? ??? ??????? ?????? ????????? ?????.",
+      "technical": "Qwen3-4B GGUF ?????????? ????? ?? ????????? ????????? ??????; ?????? ????????? IDs ?????????? ? ??????. Avatar.tsx ?????? ????????? ??????? ?? SVG, CSS ?????? ??? ?????????. ??????? ??????? ???????????????? PCM ????????? ? CSS-?????????? ??? ????????????? ???; ?????????? ?? ???????????.",
       "sources": [
         "apps/backend/src/smart_traffic_backend/pilot.py",
         "apps/backend/src/smart_traffic_backend/pilot_model.py",
         "apps/dashboard/src/features/pilot/Voice.ts",
-        "apps/dashboard/src/features/pilot/VideoAvatar.tsx",
-        "apps/backend/src/smart_traffic_backend/pilot_llama.py"
+        "apps/dashboard/src/features/pilot/Avatar.tsx",
+        "apps/backend/src/smart_traffic_backend/pilot_llama.py",
+        "scripts/fetch_pilot_models.py"
       ],
-      "english": "Pilot uses a local CPU model to generate new answers from retrieved public evidence. Whisper handles speech input and Piper speaks Russian or English. Silent body clips follow dialogue state; a separate mouth follows the RMS of actual PCM playback. Tajik speech support is not verified."
+      "english": "The local Pilot generates answers from retrieved public project facts and shows their sources. Its portrait is drawn in SVG and CSS, with dialogue-state animation and mouth movement driven by the level of actually playing audio; prerecorded avatar videos are not loaded."
     }
   ]
 }

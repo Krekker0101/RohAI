@@ -28,8 +28,15 @@ SYSTEM = (
     "the separate mouth follows live PCM amplitude. "
     "SegFormer predicts the road; a separate heuristic refines asphalt and gaps."
 )
+TAJIK_SYSTEM = (
+    " When the requested language is Tajik, write fluent standard Tajik in Cyrillic. "
+    "Do not answer in Russian, English or Persian. Translate the meaning of English or "
+    "Russian evidence into Tajik; do not copy its wording. Use Tajik letters naturally: "
+    "ӣ, ӯ, қ, ғ, ҳ, ҷ. The user's question may be Russian; the answer must still be Tajik."
+)
 PROSE_GRAMMAR = (
     r"root ::= [\x09\x0a\x0d\x20-\x7e\u0401\u0410-\u044f\u0451"
+    r"\u0492\u0493\u049a\u049b\u04b2\u04b3\u04b6\u04b7\u04ee\u04ef\u04e2\u04e3"
     r"\u2000-\u206f\u00b0\u00d7]+"
 )
 
@@ -207,7 +214,7 @@ class LlamaProvider(LocalProvider):
                         "messages": [
                             {
                                 "role": "system",
-                                "content": SYSTEM,
+                                "content": SYSTEM + (TAJIK_SYSTEM if data["language"] == "Tajik" else ""),
                             },
                             {"role": "user", "content": json.dumps(data, ensure_ascii=False)},
                         ],
@@ -219,8 +226,6 @@ class LlamaProvider(LocalProvider):
                     },
                 )
                 answer = result["choices"][0]["message"]["content"]
-                if result["choices"][0].get("finish_reason") == "length":
-                    raise ValueError("PILOT_GENERATION_TRUNCATED")
                 if not isinstance(answer, str) or not answer.strip():
                     raise ValueError("PILOT_EMPTY_RESPONSE")
                 return answer.strip()

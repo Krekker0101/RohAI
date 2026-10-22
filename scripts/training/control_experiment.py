@@ -1,5 +1,3 @@
-"""Preregister, train, select on validation, then consume one final evaluation suite."""
-
 import argparse
 import importlib.metadata
 import math

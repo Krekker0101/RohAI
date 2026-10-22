@@ -25,6 +25,7 @@ import { getBackendBaseUrl, resetBackendBaseUrl, setBackendBaseUrl } from './dat
 import { getDataSourceMode, setDataSourceMode, type DataSourceMode } from './data/source';
 import { telemetryStore } from './data/telemetry-store';
 import { directionNames, phaseNames, type Direction, type Policy } from './domain/telemetry';
+import { Localized, type UiLanguage } from './i18n';
 
 const Comparison = lazy(() => import('./features/Comparison'));
 const Analytics = lazy(() => import('./features/Analytics'));
@@ -47,6 +48,7 @@ const pages = [
 
 export function App() {
   const state = useSyncExternalStore(telemetryStore.subscribe, telemetryStore.getSnapshot);
+  const [language, setLanguage] = useState<UiLanguage>(() => localStorage.getItem('rohai-language') === 'tg' ? 'tg' : 'ru');
   const [page, setPage] = useState(() => pages.some(p => p.id === location.hash.slice(1)) ? location.hash.slice(1) : 'overview');
   const [dialog, setDialog] = useState<'settings' | 'emergency' | null>(null);
   const [busy, setBusy] = useState(false);
@@ -58,6 +60,11 @@ export function App() {
   const [recipe, setRecipe] = useState('demo');
   const [backend, setBackend] = useState(getBackendBaseUrl);
   const [sourceMode, setSourceModeState] = useState<DataSourceMode>(getDataSourceMode);
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+    localStorage.setItem('rohai-language', language);
+  }, [language]);
 
   useEffect(() => {
     telemetryStore.start();
@@ -141,7 +148,7 @@ export function App() {
         : '$env:STA_MODE="vision"; $env:STA_VISION__SOURCE="file"; $env:STA_VISION__SOURCE_ID="intel-car"; $env:STA_VISION__URI="recordings/car-detection.mp4"; $env:STA_VISION__GEOMETRY_PATH="configs/cameras/intel-car.json"';
   const launchCommand = `${command}\nuv run uvicorn smart_traffic_backend.main:app --host 127.0.0.1 --port 8000 --workers 1`;
 
-  return <div className="app-shell">
+  return <Localized language={language}><div className="app-shell">
     <aside className="sidebar">
       <a className="brand" href="#overview" aria-label="Smart Traffic AI — главная"><div className="brand-icon"><Waypoints size={25}/></div><div>smart traffic<span>INTELLIGENCE IN MOTION</span></div></a>
       <div className="workspace-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
@@ -167,6 +174,10 @@ export function App() {
           {!isVideo ? <span className={`connection-status ${safe ? '' : 'disconnected'}`}><span className="live-dot"/>{safe ? (isDemo ? 'Demo готов' : 'Система онлайн') : state.connected ? 'Ожидание данных' : 'Нет соединения'}</span> : null}
           <Suspense fallback={null}><PilotWidget page={page as PilotPage} mode={sourceMode}/></Suspense>
           <span className="topbar-separator"/>
+          <div className="segmented language-switch" aria-label="Language">
+            <button type="button" className={language === 'ru' ? 'selected' : ''} aria-pressed={language === 'ru'} onClick={() => setLanguage('ru')} title="Русский">RU</button>
+            <button type="button" className={language === 'tg' ? 'selected' : ''} aria-pressed={language === 'tg'} onClick={() => setLanguage('tg')} title="Тоҷикӣ">TG</button>
+          </div>
           <button className="icon-button" aria-label="Настройки подключения" onClick={() => setDialog('settings')}><Settings2 size={18}/></button>
           <div className="avatar" title="Локальная панель оператора">OP</div>
         </div>
@@ -187,7 +198,7 @@ export function App() {
         {error ? <div className="error-banner" role="alert">{error}<button onClick={() => setError('')}>Закрыть</button></div> : null}
 
         <Suspense fallback={<div className="empty">Загружаем раздел…</div>}>
-          {page === 'video' ? <VideoAnalysis/> : page === 'operations' ? <Operations/> : page === 'intelligence' ? <Intelligence/> : page === 'overview' ? <Overview snapshot={snapshot} system={system} safe={safe} history={state.history} events={state.events} onEmergency={() => setDialog('emergency')}/> : page === 'comparison' ? <Comparison/> : page === 'analytics' ? <Analytics snapshot={snapshot}/> : <Calibration system={system}/>}
+          {page === 'video' ? <VideoAnalysis/> : page === 'operations' ? <Operations/> : page === 'intelligence' ? <Intelligence/> : page === 'overview' ? <Overview demo={isDemo} snapshot={snapshot} system={system} safe={safe} history={state.history} events={state.events} onEmergency={() => setDialog('emergency')}/> : page === 'comparison' ? <Comparison/> : page === 'analytics' ? <Analytics snapshot={snapshot}/> : <Calibration system={system}/>}
         </Suspense>
         <footer className="page-footer"><span><ShieldCheck size={14}/>{isVideo ? 'Vision обнаруживает. Tracking сопоставляет. Отчёт сохраняет.' : 'Vision наблюдает. Decision решает. Safety разрешает.'}</span><span>Smart Traffic AI · {isVideo ? 'recorded video analysis' : isDemo ? 'presentation demo' : 'real backend'}</span></footer>
       </main>
@@ -212,5 +223,5 @@ export function App() {
       <button className="text-button" onClick={() => void act(() => navigator.clipboard.writeText(launchCommand), 'Команда скопирована')}>Скопировать команду</button>
       <div className="demo-guide"><Activity size={18}/><p><b>Сценарий показа:</b> DEMO → Обзор → «Камера» → Видеоаналитика → AI vs Fixed-Time → Экстренный приоритет. Затем переключите REAL, чтобы показать, что тот же UI работает с настоящим backend.</p></div>
     </div></Dialog> : null}
-  </div>;
+  </div></Localized>;
 }

@@ -20,6 +20,8 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from fastapi.staticfiles import StaticFiles
 from pydantic import Field
 from traffic_core.models import Decision, Model, Phase
+from smart_traffic_backend.config import Settings
+from smart_traffic_backend.video_analysis import VideoJobs, video_router
 
 from smart_traffic_backend.maket.config import MaketCalibration, MaketConfig
 from smart_traffic_backend.maket.discovery import (
@@ -69,12 +71,19 @@ def create_maket_app(
         if persistent_viewer
         else None
     )
+    video_settings = Settings(
+        mode="vision",
+        vision=config.camera,
+        video_jobs_directory=config.session_directory.parent / "video-analysis",
+    )
+    video_jobs = VideoJobs(video_settings)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         runtime = MaketRuntime(config)
         holder["runtime"] = runtime
         try:
+            await video_jobs.start()
             await runtime.start()
             if auto_setup:
                 await autosetup()
@@ -84,6 +93,7 @@ def create_maket_app(
                 asyncio.create_task(asyncio.to_thread(webbrowser.open, local_origin + "/maket"))
             yield
         finally:
+            await video_jobs.close()
             if setup_task is not None and not setup_task.done():
                 setup_task.cancel()
                 from contextlib import suppress
@@ -93,6 +103,7 @@ def create_maket_app(
             await holder["runtime"].stop()
 
     app = FastAPI(title="RohAI Physical Maket", lifespan=lifespan)
+    app.state.video_jobs = video_jobs
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(request: Request, error: RequestValidationError) -> JSONResponse:
@@ -189,6 +200,8 @@ def create_maket_app(
         ):
             return
         raise HTTPException(401, "Operator token required")
+
+    app.include_router(video_router(auth, prefix="/api/maket/video"))
 
     @app.post("/api/maket/session")
     def establish_session(request: Request, body: dict[str, Any] | None = None) -> Response:

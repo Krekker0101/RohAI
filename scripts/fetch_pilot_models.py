@@ -3,13 +3,74 @@
 import argparse
 import hashlib
 import json
+import shutil
 import time
+import tempfile
 import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+TAJIK_TTS_REVISION = "df7cb4bd7ab732587045120cb502d5bda8d8c68c"
+TAJIK_TTS_FILES = (
+    "config.json",
+    "model.safetensors",
+    "special_tokens_map.json",
+    "tokenizer_config.json",
+    "vocab.json",
+)
+
+
+def fetch_tajik_voice() -> None:
+    """Install the revision-pinned, safe-tensors Tajik speech checkpoint."""
+    from huggingface_hub import snapshot_download
+
+    target = ROOT / "datasets/models/pilot/voice-tg"
+    existing_receipt = target / "receipt.json"
+    if existing_receipt.is_file():
+        try:
+            installed = json.loads(existing_receipt.read_text(encoding="utf-8"))
+            valid = installed.get("revision") == TAJIK_TTS_REVISION and set(
+                installed.get("files", {})
+            ) == set(TAJIK_TTS_FILES)
+            for name, info in installed.get("files", {}).items():
+                path = target / name
+                if not path.is_file():
+                    valid = False
+                    break
+                with path.open("rb") as stream:
+                    valid &= hashlib.file_digest(stream, "sha256").hexdigest() == info["sha256"]
+            if valid:
+                print("Verified installed Tajik voice.", flush=True)
+                return
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+            pass
+    with tempfile.TemporaryDirectory(prefix="rohai-tajik-tts-") as temporary:
+        snapshot = Path(snapshot_download(
+            repo_id="facebook/mms-tts-tgk",
+            revision=TAJIK_TTS_REVISION,
+            allow_patterns=list(TAJIK_TTS_FILES),
+            local_dir=Path(temporary) / "model",
+        ))
+        target.mkdir(parents=True, exist_ok=True)
+        receipt: dict[str, dict[str, int | str]] = {}
+        for filename in TAJIK_TTS_FILES:
+            source = snapshot / filename
+            if not source.is_file() or source.is_symlink():
+                raise ValueError(f"Tajik TTS checkpoint is incomplete: {filename}")
+            destination = target / filename
+            shutil.copyfile(source, destination)
+            with destination.open("rb") as stream:
+                digest = hashlib.file_digest(stream, "sha256").hexdigest()
+            receipt[filename] = {"sha256": digest, "size": destination.stat().st_size}
+        receipt_path = target / "receipt.json.part"
+        receipt_path.write_text(
+            json.dumps({"revision": TAJIK_TTS_REVISION, "files": receipt}, indent=2),
+            encoding="utf-8",
+        )
+        receipt_path.replace(target / "receipt.json")
+    print("Installed Tajik voice (facebook/mms-tts-tgk; local, ~145 MB).", flush=True)
 
 
 def fetch(receipt: Path) -> None:
@@ -88,6 +149,11 @@ def extract_runtime(receipt: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path)
+    parser.add_argument(
+        "--install-tajik-voice",
+        action="store_true",
+        help="Download the optional MMS Tajik TTS model (CC-BY-NC 4.0).",
+    )
     args = parser.parse_args()
     receipts = (
         [args.manifest]
@@ -102,6 +168,8 @@ def main() -> None:
         fetch(receipt)
         if receipt.stem == "llama-runtime":
             extract_runtime(receipt)
+    if args.install_tajik_voice:
+        fetch_tajik_voice()
 
 
 if __name__ == "__main__":

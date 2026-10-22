@@ -12,7 +12,7 @@ Page = Literal[
     "overview", "video", "analytics", "comparison", "calibration", "intelligence", "operations"
 ]
 Level = Literal["auto", "simple", "standard", "technical"]
-Language = Literal["ru", "en"]
+Language = Literal["ru", "en", "tg"]
 
 
 class Fact(BaseModel):
@@ -31,6 +31,7 @@ class Fact(BaseModel):
 
 class Knowledge:
     def __init__(self, path: Path) -> None:
+        path = path.resolve()
         data = json.loads(path.read_text(encoding="utf-8"))
         if data.get("public_only") is not True:
             raise ValueError("Pilot knowledge must be public")
@@ -38,6 +39,10 @@ class Knowledge:
         if len(self.facts) != len(data["facts"]):
             raise ValueError("Duplicate knowledge identifiers")
         self.version = hashlib.sha256(path.read_bytes()).hexdigest()
+        # Knowledge source paths are repository-relative. Resolve them from the
+        # repository root (the knowledge file lives under configs/pilot), not
+        # from the process working directory used to launch the backend.
+        repository_root = path.parents[2]
         for fact in self.facts.values():
             if any(identity not in self.facts for identity in fact.references):
                 raise ValueError("Invalid knowledge reference")
@@ -51,14 +56,29 @@ class Knowledge:
                 ):
                     raise ValueError("Non-public knowledge source")
                 if (
-                    not source.startswith(("apps/", "packages/", "docs/", "tests/"))
+                    not source.startswith(
+                        ("apps/", "configs/", "packages/", "docs/", "scripts/", "tests/")
+                    )
                     and source != "README.md"
                 ):
                     raise ValueError("Source outside public allowlist")
-                self.source_hashes[source] = hashlib.sha256(Path(source).read_bytes()).hexdigest()
+                source_path = repository_root / source
+                if not source_path.is_file():
+                    raise ValueError(f"Knowledge source does not exist: {source}")
+                self.source_hashes[source] = hashlib.sha256(source_path.read_bytes()).hexdigest()
 
     def retrieve(self, question: str, page: Page, previous: list[str]) -> list[Fact]:
         lower = question.lower()
+        if re.search(
+            r"датасет|dataset|маҷм[ӯу]аи?\s+(?:дода|маълумот)|"
+            r"маҷм[ӯу]аи?\s+омӯзиш|training data",
+            lower,
+        ):
+            return [self.facts["training"]]
+        if re.search(r"тоҷик|таджик|tajik", lower) and re.search(
+            r"гап|сухан|овоз|забон|голос|speech|voice", lower
+        ):
+            return [self.facts["pilot"]]
         if re.search(r"поворот|rotat", lower):
             return [self.facts["aerial"]]
         if re.search(r"confidence|уверен|track.?id|\bID\b|км/ч|km/h", question, re.I):
@@ -88,7 +108,7 @@ class Knowledge:
             word = ordinal.group()
             index = 0 if word in ("перв", "first") else 1 if word in ("втор", "second") else 2
             return [self.facts[previous[index]]] if index < len(previous) else []
-        words = re.findall(r"[а-яёa-z0-9]+", lower)
+        words = re.findall(r"[а-яёғқҳҷӯӣa-z0-9]+", lower)
         excluded = {
             "что",
             "как",
@@ -110,6 +130,14 @@ class Knowledge:
             "проекта",
             "проекте",
             "project",
+            "дар",
+            "барои",
+            "чӣ",
+            "чи",
+            "метавонад",
+            "метавони",
+            "гуфта",
+            "бораи",
         }
         meaningful = [word for word in words if word not in excluded and len(word) >= 3]
 
@@ -157,6 +185,17 @@ class Knowledge:
         """Supply public evidence at the requested detail, never manufacture an answer."""
         if language == "en":
             return fact.english
+        if language == "tg":
+            # Keep evidence intact; multilingual generators are instructed to answer in Tajik.
+            evidence = fact.english or "\n".join(dict.fromkeys((fact.simple, fact.standard)))
+            return (
+                "Answer in standard Tajik (Тоҷикӣ), in Cyrillic. Use natural, grammatically "
+                "correct Tajik wording and current Tajik spelling, including ғ, ӣ, қ, ӯ, ҳ, ҷ. "
+                "Do not answer in Russian or transliteration. Keep product names and necessary "
+                "technical terms unchanged. State only what the evidence supports; do not invent "
+                "details. Be concise and directly answer the question.\n"
+                "Verified project evidence:\n" + evidence
+            )
         if level in ("simple", "standard", "technical"):
             return str(getattr(fact, level))
         if fact.id == "speed":
@@ -224,16 +263,6 @@ class Knowledge:
             re.I,
         ):
             needs_caveat |= any(fact.status == "experimental" for fact in facts)
-        if re.search(r"таджик|tajik|тоҷик|тajик", question + " " + answer, re.I):
-            if not re.search(
-                r"не.{0,15}(подтверж|провер|поддерж|доступ|умеет)|пока\s+нет|"
-                r"нет\s+(подтвержд|поддерж)|not\s+(verified|supported|available)|no\s+verified|"
-                r"проверенн.{0,35}таджик.{0,25}нет|"
-                r"только.{0,15}русск.{0,15}англ|only.{0,15}Russian.{0,15}English",
-                answer,
-                re.I,
-            ):
-                raise ValueError("PILOT_GENERATION_UNSUPPORTED")
         if re.search(r"точност|accuracy", question, re.I) and re.search(
             r"не доказы|не подтверж|not prove|not verified", evidence, re.I
         ):
@@ -242,6 +271,15 @@ class Knowledge:
             raise ValueError("PILOT_GENERATION_UNSUPPORTED")
         if re.search(r"ограничений нет|без ограничений|no limitations", answer, re.I):
             raise ValueError("PILOT_GENERATION_UNSUPPORTED")
+        if language == "tg":
+            words = re.findall(r"[а-яёғқҳҷӯӣ]+", answer.casefold())
+            if not words or not re.search(r"[ғқҳҷӯӣ]", answer, re.I):
+                raise ValueError("PILOT_LANGUAGE_UNAVAILABLE")
+            counts = {word: words.count(word) for word in set(words)}
+            if len(words) >= 8 and max(counts.values()) / len(words) > 0.3:
+                raise ValueError("PILOT_REPETITION")
+            if len(words) >= 12 and len(set(words)) / len(words) < 0.4:
+                raise ValueError("PILOT_REPETITION")
         if language == "ru" and not re.search(r"[а-яё]", answer, re.I):
             raise ValueError("PILOT_LANGUAGE_UNAVAILABLE")
         if language == "ru":

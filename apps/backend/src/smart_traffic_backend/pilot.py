@@ -142,6 +142,11 @@ class PilotService:
     def capabilities(self) -> dict[str, Any]:
         root = self.config.model_directory
         using_llama = isinstance(self.provider, LlamaProvider)
+        tajik_voice = root / "voice-tg"
+        tajik_tts_available = all(
+            (tajik_voice / name).is_file()
+            for name in ("model.safetensors", "config.json", "vocab.json", "receipt.json")
+        )
         return {
             "enabled": self.config.enabled,
             "provider": self.config.provider,
@@ -157,7 +162,8 @@ class PilotService:
             else self.config.ollama_model,
             "stt_available": (root / "whisper/model.safetensors").is_file(),
             "tts_languages": [
-                lang for lang in ("ru", "en") if any((root / f"voice-{lang}").glob("*.onnx"))
+                *[lang for lang in ("ru", "en") if any((root / f"voice-{lang}").glob("*.onnx"))],
+                *(["tg"] if tajik_tts_available else []),
             ],
             "knowledge_version": self.knowledge.version,
             "knowledge_records": len(self.knowledge.facts),
@@ -166,8 +172,8 @@ class PilotService:
             "audio_saved": False,
             "history_saved": False,
             "read_only": True,
-            "languages": ["ru", "en"],
-            "tajik_verified": False,
+            "languages": ["ru", "en", "tg"],
+            "tajik_verified": tajik_tts_available,
         }
 
     async def chat(self, body: ChatRequest, owner: str) -> dict[str, Any]:
@@ -186,7 +192,18 @@ class PilotService:
         started = time.monotonic()
         facts: list[Fact] = []
         try:
-            if re.search(
+            if body.language == "tg" and re.fullmatch(
+                r"\s*(?:салом|ассалом(?:у алайкум)?|салом алейкум)[!?.\s]*",
+                body.question,
+                re.I,
+            ):
+                answer = (
+                    "Салом! Ман Пилоти RohAI ҳастам. Дар бораи имкониятҳои лоиҳа, "
+                    "таҳлили видео ё кори система савол диҳед."
+                )
+                outcome = "grounded"
+                facts = [self.knowledge.facts["overview"], self.knowledge.facts["pilot"]]
+            elif re.search(
                 r"сколько сейчас|текущие значения|current (number|values)|сколько клиентов",
                 body.question,
                 re.I,
@@ -195,23 +212,42 @@ class PilotService:
                     "Я не получаю текущую телеметрию или закрытые данные. "
                     "У меня пока нет подтверждённой информации об этих значениях."
                     if body.language == "ru"
+                    else "Ман ба маълумоти ҷории телеметрӣ ё маълумоти махфӣ дастрасӣ надорам. Дар бораи ин нишондиҳандаҳо маълумоти тасдиқшуда надорам."
+                    if body.language == "tg"
                     else "I do not receive current telemetry or private data."
                 )
                 outcome = "unknown"
             elif re.search(
-                r"\b(включи|переключи|измени|удали|запусти)\b|turn on|execute", body.question, re.I
+                r"\b(включи|переключи|измени|удали|запусти)\b|turn on|execute|фаъол|иҷро кун", body.question, re.I
             ):
                 answer = (
                     "Я только объясняю RohAI и не выполняю команды управления."
                     if body.language == "ru"
+                    else "Ман метавонам кори RohAI-ро шарҳ диҳам, аммо фармонҳои идоракуниро иҷро намекунам."
+                    if body.language == "tg"
                     else "I explain RohAI and do not execute control commands."
                 )
                 outcome = "out_of_scope"
+            elif body.language == "tg" and re.search(
+                r"датасет|dataset|маҷм[ӯу]аи?\s+(?:дода|маълумот)|"
+                r"маҷм[ӯу]аи?\s+омӯзиш|training data",
+                body.question,
+                re.I,
+            ):
+                answer = (
+                    "Дар лоиҳа танҳо қолаби холии маҷмӯаи додаҳои «rohai-road-cameras» "
+                    "мавҷуд аст; он сабт ва кадр надорад. Аз ин рӯ, ин маҷмӯа ҳанӯз барои "
+                    "омӯзонидани модел ё санҷидани дақиқии он омода нест."
+                )
+                facts = [self.knowledge.facts["training"]]
+                outcome = "grounded"
             elif not topic_allowed(body.question):
                 answer = (
                     "Я помогаю разобраться в RohAI. "
                     "Могу рассказать о его возможностях и использовании."
                     if body.language == "ru"
+                    else "Ман барои шиносоӣ бо RohAI кӯмак мекунам. Метавонам имкониятҳо ва тарзи истифодаи онро шарҳ диҳам."
+                    if body.language == "tg"
                     else "I help with RohAI. Ask about its features or how to use it."
                 )
                 facts = []
@@ -219,9 +255,13 @@ class PilotService:
             else:
                 candidates = self.knowledge.retrieve(body.question, body.page, session.last_ids)
                 if not candidates:
+                    candidates = [self.knowledge.facts.get(body.page, self.knowledge.facts["overview"])]
+                if not candidates:
                     answer = (
                         "У меня пока нет подтверждённой информации об этом в проекте."
                         if body.language == "ru"
+                        else "Дар бораи ин мавзӯъ дар лоиҳа ҳоло маълумоти тасдиқшуда нест."
+                        if body.language == "tg"
                         else "I do not have verified project information about that yet."
                     )
                     facts = []
@@ -233,7 +273,7 @@ class PilotService:
                     generation_prompt = json.dumps(
                         {
                             "question": body.question,
-                            "language": "Russian" if body.language == "ru" else "English",
+                            "language": {"ru": "Russian", "en": "English", "tg": "Tajik"}[body.language],
                             "explanation_level": body.level,
                             "current_page": body.page,
                             "mode": body.mode,
@@ -258,16 +298,32 @@ class PilotService:
                     except ValueError:
                         corrected = json.loads(generation_prompt)
                         corrected["correction"] = (
+                            "The previous answer was not valid Tajik. Write clear, natural, "
+                            "grammatically correct standard Tajik in Cyrillic, using current "
+                            "Tajik spelling (including ғ, ӣ, қ, ӯ, ҳ, ҷ). Do not write Russian "
+                            "or transliterated Tajik. Preserve product names and technical terms "
+                            "only when needed. Translate the evidence faithfully; add no facts. "
+                            "Avoid unsupported numbers and quotations. Use two concise sentences."
+                            if body.language == "tg"
+                            else
                             "The previous formulation failed validation. Use the requested "
                             "language and ONLY these facts. Avoid numbers and quoted names "
                             "unless they appear exactly in the facts. Write two short sentences."
                         )
-                        generated = await self.provider.generate(
-                            json.dumps(corrected, ensure_ascii=False)
-                        )
-                        answer = self.knowledge.validate_generated(
-                            generated, facts, body.language, body.question
-                        )
+                        try:
+                            generated = await self.provider.generate(
+                                json.dumps(corrected, ensure_ascii=False)
+                            )
+                            answer = self.knowledge.validate_generated(
+                                generated, facts, body.language, body.question
+                            )
+                        except ValueError:
+                            if body.language != "tg":
+                                raise
+                            answer = (
+                                "Ман ҷавоби боэътимод тартиб дода натавонистам. "
+                                "Лутфан, саволро бо ибораҳои дигар нависед."
+                            )
                     outcome = "grounded"
             response_id = str(uuid4())
             session.last_ids = [

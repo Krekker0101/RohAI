@@ -1,5 +1,3 @@
-"""Regenerate training and model compatibility schemas without starting training."""
-
 import json
 from pathlib import Path
 

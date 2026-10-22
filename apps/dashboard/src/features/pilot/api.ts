@@ -1,8 +1,8 @@
 import { request, requestRaw } from '../../data/api';
 export type PilotPage = 'overview' | 'video' | 'analytics' | 'comparison' | 'calibration' | 'intelligence' | 'operations';
-export type PilotLanguage = 'ru' | 'en';
+export type PilotLanguage = 'ru' | 'en' | 'tg';
 export type PilotLevel = 'auto' | 'simple' | 'standard' | 'technical';
-export interface Capabilities { chat_available: boolean; stt_available: boolean; tts_languages: string[]; knowledge_records: number; provider: string; read_only: boolean; generation_status?: 'experimental' | 'local' }
+export interface Capabilities { chat_available: boolean; stt_available: boolean; tts_languages: string[]; languages: PilotLanguage[]; knowledge_records: number; provider: string; read_only: boolean; generation_status?: 'experimental' | 'local' }
 export interface Answer {
   conversation_id: string; response_id: string; answer: string; outcome: 'grounded' | 'unknown' | 'out_of_scope'; language: PilotLanguage;
   sources: { id: string; title: string; status: string; files: { path: string; sha256: string }[] }[];

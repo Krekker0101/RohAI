@@ -49,6 +49,22 @@ def test_protected_viewer_restart_expiry_and_revocation(tmp_path: Path) -> None:
     assert not ViewerPairing(store, clock=lambda: now[0]).valid(new)
 
 
+def test_unreadable_pairing_store_is_preserved_and_requires_new_consent(
+    tmp_path: Path,
+) -> None:
+    store = tmp_path / "pairing.dat"
+    store.write_bytes(b"unreadable protected state")
+
+    pairing = ViewerPairing(store, clock=lambda: 1000.0)
+
+    backups = list(tmp_path.glob("pairing.dat.unreadable-*"))
+    assert len(backups) == 1
+    assert backups[0].read_bytes() == b"unreadable protected state"
+    assert not pairing.valid("old-grant")
+    new_grant = pairing.issue()
+    assert ViewerPairing(store, clock=lambda: 1000.0).valid(new_grant)
+
+
 def test_pairing_view_only_survives_service_restart(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -17,11 +17,19 @@ from traffic_vision.detector import Detector, YOLODetector
 from traffic_vision.sources import VideoFrame
 
 from smart_traffic_backend.config import Settings
+from smart_traffic_backend.traffic_recommendation import (
+    analyze_image,
+    assess_geometry,
+    recommend_signals,
+)
 from smart_traffic_backend.video_analysis import publish_preview, write_json
 
 
 def analyze(directory: Path, settings: Settings, detector: Detector | None = None) -> None:
     row: dict[str, Any] = json.loads((directory / "status.json").read_text(encoding="utf-8"))
+    if row.get("media_kind") == "image":
+        analyze_image(directory, settings, detector)
+        return
     source = directory / row["input_name"]
     capture = cv2.VideoCapture(str(source))
     profile = row.get("profile", "standard")
@@ -32,7 +40,13 @@ def analyze(directory: Path, settings: Settings, detector: Detector | None = Non
     )
     offline_vision = settings.vision.model_copy(update={"torch_threads": cpu_threads})
     aerial_config = settings.video_aerial.model_copy(
-        update={"rotated_pass": profile == "aerial_precise" or settings.video_aerial.rotated_pass}
+        update={
+            "rotated_pass": profile == "aerial_precise" or settings.video_aerial.rotated_pass,
+            "confidence": min(settings.video_aerial.confidence, 0.15),
+            # Keep close vehicles in frame; the default 0.10 cutoff drops cars
+            # whose box is taller than a tenth of the short image dimension.
+            "max_object_fraction": 0.3,
+        }
     )
     if detector is not None:
         model = detector
@@ -65,6 +79,14 @@ def analyze(directory: Path, settings: Settings, detector: Detector | None = Non
     preview_skipped = 0
     road_model = None
     road_mask = None
+    road_geometry: dict[str, Any] = {
+        "status": "unavailable",
+        "lane_count": None,
+        "intersection_detected": False,
+        "approaches": [],
+        "lane_markings_detected": False,
+        "reason": "Road segmentation was not enabled.",
+    }
     road_last_media = -10.0
     road_inferences = 0
     preview_seconds = road_seconds = 0.0
@@ -295,6 +317,8 @@ def analyze(directory: Path, settings: Settings, detector: Detector | None = Non
                         / road_mask.size
                         * 100,
                     )
+                    road_geometry = assess_geometry(road_mask, width, height)
+                    row["road_geometry"] = road_geometry
                 for detection in detections:
                     box = detection.bbox
                     x1, y1, x2, y2 = (
@@ -346,6 +370,11 @@ def analyze(directory: Path, settings: Settings, detector: Detector | None = Non
         report = {
             "schema_version": "1.0",
             "domain": "UPLOADED_RECORDED_VIDEO",
+            "road_geometry": road_geometry,
+            "signal_recommendation": recommend_signals(
+                row.get("unique_classes", {}),
+                bool(row.get("unique_classes", {}).get("pedestrian", 0)),
+            ),
             "filename": row["filename"],
             "input_sha256": input_hash,
             "model": model.name,
@@ -393,6 +422,9 @@ def analyze(directory: Path, settings: Settings, detector: Detector | None = Non
             "queue_mae": None,
             "road_delay_seconds": None,
             "limits": [
+                "Lane count is not measurable from road segmentation alone; "
+                "configure surveyed geometry or calibrated lane markings",
+                "Recorded-media signal recommendations never actuate hardware",
                 "Track count is not a calibrated traffic flow count",
                 "Confidence is model confidence, not independently measured accuracy",
                 "Low image motion is not a confirmed road queue; camera motion affects it",
@@ -407,6 +439,8 @@ def analyze(directory: Path, settings: Settings, detector: Detector | None = Non
             progress_percent=100,
             estimated_remaining_seconds=0,
             report_ready=True,
+            road_geometry=road_geometry,
+            signal_recommendation=report["signal_recommendation"],
             trace_dropped_records=trace_dropped,
             heartbeat=time.monotonic(),
         )
@@ -429,7 +463,7 @@ def run_video_job(directory: Path, settings: Settings) -> None:
         row: dict[str, Any] = json.loads((directory / "status.json").read_text(encoding="utf-8"))
         error = (
             str(exc)
-            if isinstance(exc, ValueError) and str(exc).startswith(("VIDEO_", "ROAD_"))
+            if isinstance(exc, ValueError) and str(exc).startswith(("VIDEO_", "ROAD_", "IMAGE_"))
             else ("MODEL_MISSING" if isinstance(exc, FileNotFoundError) else "ANALYSIS_FAILED")
         )
         row.update(status="failed", stage="failed", error=error, heartbeat=time.monotonic())

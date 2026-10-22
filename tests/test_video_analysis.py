@@ -13,6 +13,11 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from smart_traffic_backend.config import Settings
 from smart_traffic_backend.main import create_app
+from smart_traffic_backend.traffic_recommendation import (
+    analyze_image,
+    assess_geometry,
+    recommend_signals,
+)
 from smart_traffic_backend.video_analysis import (
     VideoJobs,
     publish_preview,
@@ -92,6 +97,45 @@ def test_offline_analyzes_every_frame_and_preserves_unknown_road_metrics(tmp_pat
     assert report["road_delay_seconds"] is None and report["queue_mae"] is None
     assert len((directory / "frames.jsonl").read_text().splitlines()) == 20
     assert (directory / "preview.jpg").stat().st_size > 0
+
+
+def test_uploaded_photo_runs_detection_and_generates_safe_recommendation(tmp_path: Path) -> None:
+    config = settings(tmp_path)
+    jobs = VideoJobs(config)
+    row = jobs.reserve("intersection.jpg", roads=False)
+    directory = jobs.directory(row["id"])
+    assert cv2.imwrite(
+        str(directory / row["input_name"]), np.full((96, 128, 3), 80, dtype=np.uint8)
+    )
+    detector = FixtureDetector()
+    analyze_image(directory, config, detector)
+    state = jobs.read(row["id"])
+    report = json.loads((directory / "report.json").read_text(encoding="utf-8"))
+    assert state["status"] == "completed" and state["processed_frames"] == 1
+    assert report["domain"] == "UPLOADED_IMAGE" and report["objects"][0]["kind"] == "car"
+    recommendation = report["signal_recommendation"]
+    assert recommendation["physical_execution"] is False
+    assert recommendation["conflict_check"]["passed"] is True
+    assert set(recommendation["signals"]) == {"north", "south", "east", "west"}
+    assert (directory / "preview.jpg").is_file() and detector.closed
+
+
+def test_geometry_preserves_lane_uncertainty_and_pedestrian_phase_is_all_red() -> None:
+    mask = np.zeros((100, 100), dtype=np.uint8)
+    mask[20:80, 40:60] = 255
+    geometry = assess_geometry(mask, 100, 100)
+    assert geometry["lane_count"] is None and geometry["lane_markings_detected"] is False
+    recommendation = recommend_signals({"car": 2}, True, pedestrian_crossing=True)
+    assert recommendation["conflict_check"]["passed"]
+    assert all(signal["vehicles"] == "red" for signal in recommendation["signals"].values())
+    assert all(signal["pedestrians"] == "red" for signal in recommendation["signals"].values())
+
+
+def test_image_upload_rejects_unsupported_extensions(tmp_path: Path) -> None:
+    headers = {"X-Operator-Token": "video-test-secret-1234", "Content-Type": "image/png"}
+    with TestClient(create_app(settings(tmp_path))) as client:
+        response = client.post("/api/v1/video/jobs?filename=bad.exe", content=b"x", headers=headers)
+        assert response.status_code == 415
 
 
 def test_invalid_media_fails_before_model_initialization(tmp_path: Path) -> None:

@@ -4,7 +4,7 @@ test('live dashboard, policy, emergency, comparison and ROI',async({page})=>{
   const errors:string[]=[];
   page.on('pageerror',e=>errors.push(e.message));
   await page.goto('/dashboard/');
-  await expect(page.getByText('Demo готов',{exact:true})).toBeVisible();
+  await expect(page.locator('.intersection')).toBeVisible();
   await expect(page.getByRole('heading',{name:'Город в движении.'})).toBeVisible();
   await page.getByRole('button',{name:'Fixed-Time',exact:true}).click();
   await expect.poll(async()=> (await (await page.request.get('/api/v1/demo/system')).json()).policy).toBe('fixed');

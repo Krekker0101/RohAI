@@ -7,6 +7,7 @@ import json
 import os
 import secrets
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -63,6 +64,24 @@ def http_json(url: str, *, token: str | None = None) -> dict[str, Any]:
     with opener.open(request, timeout=2) as response:
         value = json.load(response)
     return dict(value)
+
+
+def running_service(origin: str) -> dict[str, Any] | None:
+    """Return RohAI launcher identity if this port serves one, else None."""
+    try:
+        value = http_json(origin + "/health/launcher")
+    except (OSError, ValueError, urllib.error.URLError):
+        return None
+    if value.get("application") == "rohai-service":
+        return value
+    return None
+
+
+def port_is_open(port: int) -> bool:
+    """Check the local bind address, including services without HTTP health routes."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.settimeout(0.5)
+        return probe.connect_ex(("127.0.0.1", port)) == 0
 
 
 def fingerprint() -> str:
@@ -154,6 +173,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"RohAI configuration error: {error}")
         return 2
     url = f"http://127.0.0.1:{config.port}/maket"
+    demo_url = "http://127.0.0.1:8000"
     lock = LaunchLock(Path(".runtime/rohai-launch.lock"))
     if not lock.acquired:
         try:
@@ -166,14 +186,40 @@ def main(argv: list[str] | None = None) -> int:
                         and existing.get("role") == "maket"
                         and existing.get("ready") is True
                     ):
-                        print("RohAI is already running; reusing its verified workspace.")
+                        demo = running_service(demo_url)
+                        if not demo or demo.get("workspace") != fingerprint() or demo.get("role") != "demo":
+                            break
+                        print(f"RohAI is already running successfully. Dashboard: {url}")
                         if not args.no_browser:
-                            webbrowser.open(url)
+                            if not webbrowser.open(url):
+                                print("The browser did not open automatically; use the dashboard address above.")
+                        print("This window will stay open while RohAI runs. Press Ctrl+C to return to PowerShell.")
+                        try:
+                            while True:
+                                time.sleep(1)
+                                maket = running_service(f"http://127.0.0.1:{config.port}")
+                                demo = running_service(demo_url)
+                                if (
+                                    not maket
+                                    or maket.get("workspace") != fingerprint()
+                                    or maket.get("role") != "maket"
+                                    or not demo
+                                    or demo.get("workspace") != fingerprint()
+                                    or demo.get("role") != "demo"
+                                ):
+                                    print("A RohAI service stopped responding. Rerun start-rohai.bat to recover it.")
+                                    return 2
+                        except KeyboardInterrupt:
+                            print("RohAI is still running in its existing window.")
                         return 0
                 except (OSError, ValueError):
                     pass
                 time.sleep(0.2)
-            print("RohAI launch is already in progress. Check the original launcher console.")
+            occupied = running_service(f"http://127.0.0.1:{config.port}")
+            if occupied and occupied.get("workspace") == fingerprint():
+                print("RohAI launch is still starting. Wait a few seconds and open the existing dashboard.")
+            else:
+                print("RohAI launch is already in progress or its maket service is not responding. Check the original launcher console.")
             return 2
         finally:
             lock.close()
@@ -187,13 +233,19 @@ def main(argv: list[str] | None = None) -> int:
             ("maket", config.port, "/api/maket/shutdown"),
         ):
             origin = f"http://127.0.0.1:{port}"
-            try:
-                http_json(origin + "/health/launcher")
-            except (OSError, ValueError):
-                pass
-            else:
+            identity = running_service(origin)
+            if identity:
+                if identity.get("workspace") == fingerprint():
+                    if identity.get("role") == role and identity.get("ready") is True:
+                        print(f"Reusing existing RohAI {role} service on port {port}.")
+                        continue
+                    raise RuntimeError(f"Port {port} hosts an unexpected RohAI service role ({identity.get('role', 'unknown')}).")
                 raise RuntimeError(
-                    f"Port {port} is occupied. Stop the previous service before launching."
+                    f"Port {port} is used by a different RohAI project ({identity.get('workspace', 'unknown workspace')}). Close that project first."
+                )
+            if port_is_open(port):
+                raise RuntimeError(
+                    f"Port {port} is occupied by another application. Close that application or configure it to use another port, then run start-rohai.bat again."
                 )
             log = Path(f".runtime/{role}-backend.log").open("wb")
             logs.append(log)
@@ -235,10 +287,13 @@ def main(argv: list[str] | None = None) -> int:
                 raise TimeoutError(f"{role} startup health check did not pass")
         print(
             f"RohAI services are ready: {url}\n"
-            "Control remains stopped until checks and confirmation. Ctrl+C stops owned services."
+            "Control remains stopped until checks and confirmation. Ctrl+C stops services started by this launcher."
         )
         if not args.no_browser:
             webbrowser.open(url)
+        if not children:
+            print(f"All RohAI services were already running. Dashboard: {url}")
+            return 0
         while all(child.poll() is None for child, _, _ in children):
             time.sleep(0.2)
         raise RuntimeError("A RohAI service exited unexpectedly; stopping the other owned service")

@@ -3,6 +3,7 @@
 import ctypes
 import hashlib
 import json
+import logging
 import os
 import secrets
 import time
@@ -10,6 +11,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 from smart_traffic_backend.maket.calibration import atomic_write
+
+logger = logging.getLogger(__name__)
 
 
 class Blob(ctypes.Structure):
@@ -51,10 +54,22 @@ class ViewerPairing:
         self.digest: str | None = None
         self.expiry = 0.0
         if path.exists():
-            state = json.loads(protect(path.read_bytes(), decrypt=True))
-            if state.get("scope") != "VIEW_ONLY" or state.get("version") != 1:
-                raise ValueError("Unsupported viewer pairing store")
-            self.digest, self.expiry = state["digest"], state["expiry"]
+            try:
+                state = json.loads(protect(path.read_bytes(), decrypt=True))
+                if state.get("scope") != "VIEW_ONLY" or state.get("version") != 1:
+                    raise ValueError("Unsupported viewer pairing store")
+                self.digest, self.expiry = state["digest"], state["expiry"]
+            except (OSError, ValueError, KeyError, TypeError):
+                # An unreadable OS-protected grant must not prevent the local
+                # service from starting. Preserve it for diagnosis; a new grant
+                # is only created after the user's explicit pair-viewer consent.
+                backup = path.with_name(f"{path.name}.unreadable-{int(self.clock())}")
+                path.replace(backup)
+                logger.warning(
+                    "Could not read local viewer pairing; preserved the old store at %s. "
+                    "A new read-only pairing requires explicit consent.",
+                    backup,
+                )
 
     def issue(self) -> str:
         token = secrets.token_urlsafe(32)

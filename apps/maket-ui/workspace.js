@@ -7,9 +7,11 @@ export async function connectLocal(api){
  await api('pair-viewer','POST',{consent:true});authorized=false;persistent=true;
 }
 export async function authorizeSetup(api){
- if(authorized){try{const p=await api('permissions');if(p.setup_authorized)return;authorized=false;}catch(e){if(e.status===404)return;authorized=false;}}
- if(!confirm('Разрешить настройку и управление учебным макетом на текущий запуск (до 8 часов)? Физический запуск потребует отдельного подтверждения и проверок безопасности.'))throw Error('Разрешение на настройку не предоставлено.');
+ if(authorized){try{const p=await api('permissions');if(p.setup_authorized)return;authorized=false;}catch(e){if(e.status!==404)authorized=false;}}
+ let remembered=false;try{remembered=localStorage.getItem('rohai-camera-consent')==='granted';}catch{}
+ if(!remembered&&!confirm('Разрешить RohAI находить и подключать камеру на этом компьютере? Разрешение запомнится в этом браузере. Его можно отозвать в разделе «Диагностика». Физический запуск перекрёстка потребует отдельного подтверждения.'))throw Error('Доступ к камере не разрешён.');
  await api('session','POST',{consent:true});authorized=true;
+ try{localStorage.setItem('rohai-camera-consent','granted');}catch{}
 }
 export const canConfigure=()=>authorized;
 export const canDiscoverAutomatically=()=>authorized&&!persistent;

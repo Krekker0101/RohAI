@@ -21,7 +21,8 @@ def emit(value: dict[str, Any]) -> None:
 @lru_cache(maxsize=4)
 def verify(directory: Path, manifests: Path, name: str) -> Path:
     root = directory / name
-    receipt = json.loads((manifests / f"{name}.json").read_text(encoding="utf-8"))
+    receipt_path = root / "receipt.json" if name == "voice-tg" else manifests / f"{name}.json"
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     for filename, info in receipt["files"].items():
         if Path(filename).name != filename:
             raise ValueError("PILOT_MODEL_INTEGRITY")
@@ -53,6 +54,7 @@ def main() -> None:
     whisper: Any = None
     processor: Any = None
     voices: dict[str, Any] = {}
+    tajik_voice: tuple[Any, Any] | None = None
     for line in sys.stdin:
         if len(line) > 2_000_000:
             emit({"error": "PILOT_INPUT_LIMIT", "done": True})
@@ -60,7 +62,10 @@ def main() -> None:
         try:
             request = json.loads(line)
             kind = request["kind"]
-            if kind in ("select", "answer", "transcribe") and torch is None:
+            if (
+                kind in ("select", "answer", "transcribe")
+                or (kind == "speech" and request.get("language") == "tg")
+            ) and torch is None:
                 import torch as torch_module
 
                 torch = torch_module
@@ -91,7 +96,14 @@ def main() -> None:
                         f"Question: {payload['question']}\n"
                         f"Answer language: {language}\n"
                         f"Explanation level: {payload['explanation_level']}\n"
-                        f"{payload.get('correction', '')}"
+                        + (
+                            "Write fluent standard Tajik in Cyrillic. Do not answer in Russian, "
+                            "English or Persian. Translate the meaning of the evidence; do not "
+                            "copy its language. Use Tajik letters ӣ, ӯ, қ, ғ, ҳ, ҷ naturally.\n"
+                            if language == "Tajik"
+                            else ""
+                        )
+                        + f"{payload.get('correction', '')}"
                     )
                     messages = [
                         {
@@ -242,6 +254,35 @@ def main() -> None:
                 del audio, inputs, result
                 emit({"text": text[:1200], "done": True})
             elif kind == "speech":
+                if request["language"] == "tg":
+                    if tajik_voice is None:
+                        from transformers import AutoTokenizer, VitsModel
+
+                        root = verify(args.directory, args.manifests, "voice-tg")
+                        tokenizer = AutoTokenizer.from_pretrained(
+                            str(root), local_files_only=True, trust_remote_code=False
+                        )
+                        model = VitsModel.from_pretrained(
+                            str(root), local_files_only=True, trust_remote_code=False,
+                            use_safetensors=True,
+                        )
+                        model.eval()
+                        tajik_voice = (tokenizer, model)
+                    tokenizer, model = tajik_voice
+                    inputs = tokenizer(request["text"][:1200], return_tensors="pt")
+                    with torch.inference_mode():
+                        waveform = model(**inputs).waveform[0].detach().cpu().numpy()
+                    waveform = np.clip(waveform, -1.0, 1.0)
+                    pcm = (waveform * 32767).astype("<i2")
+                    sample_rate = int(model.config.sampling_rate)
+                    frame_samples = sample_rate
+                    for offset in range(0, len(pcm), frame_samples):
+                        emit({
+                            "audio": base64.b64encode(pcm[offset:offset + frame_samples].tobytes()).decode(),
+                            "sample_rate": sample_rate,
+                        })
+                    emit({"done": True})
+                    continue
                 name = "voice-ru" if request["language"] == "ru" else "voice-en"
                 if name not in voices:
                     import onnxruntime  # type: ignore[import-untyped]

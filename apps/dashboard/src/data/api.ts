@@ -20,7 +20,7 @@ export function uploadVideo<T>(file: File, onProgress: (percent: number) => void
     const cleanup = () => signal.removeEventListener('abort', abort);
     xhr.open('POST', backendUrl(`/api/v1/video/jobs?filename=${encodeURIComponent(file.name)}&profile=${profile}&roads=${roads}`));
     xhr.timeout = 300000;
-    xhr.setRequestHeader('Content-Type', file.type.startsWith('video/') ? file.type : 'application/octet-stream');
+    xhr.setRequestHeader('Content-Type', file.type.startsWith('video/') || file.type.startsWith('image/') ? file.type : 'application/octet-stream');
     if (token) xhr.setRequestHeader('X-Operator-Token', token);
     xhr.upload.onprogress = event => {
       if (event.lengthComputable) onProgress(Math.round(event.loaded / event.total * 100));

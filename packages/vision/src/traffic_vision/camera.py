@@ -92,19 +92,36 @@ def _capture_worker(
     memory = shared_memory.SharedMemory(name=name)
     capture = None
     try:
-        capture = cv2.VideoCapture(settings.webcam_index, BACKENDS[settings.camera_backend])
-        if not capture.isOpened():
+        # DirectShow drivers can retain a camera briefly after the bounded
+        # discovery process releases it. Retry the actual capture process so
+        # a successful probe reliably becomes a live stream.
+        for attempt in range(settings.reconnect_attempts + 1):
+            candidate = cv2.VideoCapture(settings.webcam_index, BACKENDS[settings.camera_backend])
+            if candidate.isOpened():
+                capture = candidate
+                break
+            candidate.release()
+            if attempt < settings.reconnect_attempts:
+                stop.wait(settings.reconnect_delay_seconds)
+        if capture is None:
             errors.put_nowait("CAMERA_OPEN_FAILED")
             return
         capture.set(cv2.CAP_PROP_FRAME_WIDTH, settings.camera_width)
         capture.set(cv2.CAP_PROP_FRAME_HEIGHT, settings.camera_height)
         capture.set(cv2.CAP_PROP_FPS, settings.camera_fps)
         capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        empty_reads = 0
         while not stop.is_set():
             ok, image = capture.read()
             if not ok or image is None or image.ndim != 3 or image.shape[2] != 3 or not image.size:
+                empty_reads += 1
+                if empty_reads <= settings.reconnect_attempts and not stop.wait(
+                    settings.reconnect_delay_seconds
+                ):
+                    continue
                 errors.put_nowait("FRAME_TIMEOUT")
                 return
+            empty_reads = 0
             stamp = time.monotonic_ns()
             image = transform_frame(np.asarray(image, dtype=np.uint8), settings)
             if image.nbytes > MAX_BYTES:

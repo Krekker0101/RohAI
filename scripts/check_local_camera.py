@@ -1,5 +1,3 @@
-"""Bounded laptop capture qualification. Frames stay in memory; no images are saved."""
-
 import argparse
 import json
 import statistics

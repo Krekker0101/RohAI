@@ -1,5 +1,7 @@
 import {liveGeometry, overlayState, frameTracks} from './overlay.js';
 import {connectLocal,authorizeSetup,confirmPhysical,publicError} from './workspace.js';
+import {installMaketLocale} from './locale.js';
+installMaketLocale();
 const $ = id => document.getElementById(id);
 let cameras=[], config, geometry, state, frame, points=[], enabled=false, frameBusy=false, stateBusy=false, editing=false;
 const canvas=$('video'), ctx=canvas.getContext('2d');

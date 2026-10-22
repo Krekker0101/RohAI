@@ -1,7 +1,9 @@
 import {overlayState, liveGeometry, frameTracks} from './overlay.js';
 import {displayedSignal} from './signals.js';
 import {pipelineDiagnosis} from './diagnostics.js';
-import {connectLocal,authorizeSetup,canConfigure,canDiscoverAutomatically,confirmPhysical,publicError} from './workspace.js';
+import {connectLocal,authorizeSetup,canConfigure,canDiscoverAutomatically,confirmPhysical,publicError} from './workspace.js?v=20261019-1';
+import {installMaketLocale} from './locale.js';
+installMaketLocale();
 const $=id=>document.getElementById(id);
 const canvas=$('video'),ctx=canvas.getContext('2d'),directions=['north','south','east','west'];
 let config,geometry,state,bitmap,bitmapAt=0,connected=false,pollBusy=false,frameBusy=false,editing=false,newPoints=null,drag=null,setupBusy=false;
@@ -91,10 +93,13 @@ function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);
  $('empty').hidden=!!bitmap;
 }
 function showRoad(){if(!geometry||document.body.classList.contains('present'))return;geometry=completeDraft(geometry);editing=true;$('wizard').hidden=false;$('wizard-title').textContent='2 · Проверьте дороги и переходы';$('road-tools').hidden=false;$('continue').hidden=true;draw();}
-async function choose(c){editing=false;newPoints=null;drag=null;if(setupBusy)return;setupBusy=true;try{config.camera.webcam_index=c.index;config.camera.camera_backend=c.backend??'AUTO';config.camera_selected=true;await api('config','PUT',config);config=await api('config');geometry=await api('calibration-draft');state=await api('state');$('camera-name').textContent=c.friendly_name??'Выбранная камера';$('candidates').replaceChildren();$('notice').textContent='Открываем камеру. Направьте её на макет.';render();}catch(e){error(e);}finally{setupBusy=false;}}
+async function waitForCamera(){for(let i=0;i<16&&state?.camera_connection==='STARTING';i++){await new Promise(resolve=>setTimeout(resolve,500));state=await api('state');}return state?.camera_connection==='CONNECTED';}
+async function restoreCamera(){await authorizeSetup(api);config=await api('config');if(config.camera_selected){await api('control','POST',{action:'reconnect_camera'});state=await api('state');if(await waitForCamera()){cameraStatus();render();return;}}await discover();}
+async function choose(c){editing=false;newPoints=null;drag=null;if(setupBusy)return;setupBusy=true;try{config.camera.webcam_index=c.index;config.camera.camera_backend=c.backend??'AUTO';config.camera_selected=true;await api('config','PUT',config);config=await api('config');geometry=await api('calibration-draft');state=await api('state');$('camera-name').textContent=c.friendly_name??'Выбранная камера';$('candidates').replaceChildren();await waitForCamera();cameraStatus();render();}catch(e){error(e);}finally{setupBusy=false;}}
 async function discover(){if(setupBusy)return;setupBusy=true;$('wizard').hidden=false;$('wizard-title').textContent='1 · Ищем камеру';$('notice').textContent='Ищем доступные камеры…';let found;try{found=await api('discovery');}catch(e){error(e);return;}finally{setupBusy=false;}const available=found.cameras.filter(c=>c.available);if(available.length===1){await choose(available[0]);return;}if(!available.length){$('notice').textContent='Камера недоступна. Разрешите доступ к камере в Windows и закройте Teams/Zoom.';$('retry').hidden=false;return;}$('wizard-title').textContent='1 · Выберите камеру';$('candidates').replaceChildren(...available.map((c,i)=>{const b=document.createElement('button');if(c.preview){const img=document.createElement('img');img.src='data:image/jpeg;base64,'+c.preview;img.alt='Предпросмотр камеры';b.append(img);}b.append(c.friendly_name??'Камера '+(i+1));b.onclick=()=>choose(c);return b;}));}
-async function connect(){try{await connectLocal(api);config=await api(canConfigure()?'config':'view-config');geometry=await api('calibration-draft');state=await api('state');connected=true;$('retry').hidden=true;$('notice').textContent='Подключено. Физический запуск требует подтверждения и проверок.';$('camera-name').textContent=state.camera_metadata?.friendly_name??(config.camera_selected?'Выбранная камера':'Выберите камеру');render();if(!config.camera_selected&&canDiscoverAutomatically())await discover();}catch(e){error(e);}}
-$('retry').onclick=async()=>{if(!connected)return connect();try{await authorizeSetup(api);config=await api('config');if(!config.camera_selected)return discover();await api('control','POST',{action:'reconnect_camera'});$('retry').hidden=true;}catch(e){error(e);}};
+function cameraStatus(){const unavailable=state?.camera_connection!=='CONNECTED';$('retry').hidden=!unavailable;$('retry').textContent=config?.camera_selected?'Переподключить камеру':'Найти камеру';if(unavailable&&state){$('notice').textContent=state.camera_error?`Камера недоступна (${state.camera_error}). Проверьте разрешение Windows и повторите подключение.`:'Камера не подключена. Нажмите «'+$('retry').textContent+'» для поиска или повторного подключения.';}}
+async function connect(){try{await connectLocal(api);await authorizeSetup(api);config=await api(canConfigure()?'config':'view-config');geometry=await api('calibration-draft');state=await api('state');connected=true;$('retry').hidden=true;$('notice').textContent='Подключено. Физический запуск требует подтверждения и проверок.';$('camera-name').textContent=state.camera_metadata?.friendly_name??(config.camera_selected?'Выбранная камера':'Выберите камеру');render();if(!config.camera_selected||state.camera_connection!=='CONNECTED')await restoreCamera();}catch(e){error(e);}}
+$('retry').onclick=async()=>{if(!connected)return connect();try{await restoreCamera();}catch(e){error(e);}};
 $('main-action').onclick=async()=>{const b=$('main-action');b.disabled=true;try{await authorizeSetup(api);const physical=state.output_mode==='PHYSICAL_OUTPUT',active=state.running||state.demo_running;if(physical&&!active&&!confirmPhysical())return;const body={action:active?'stop':physical?'start':'camera_only_start'};if(physical&&!active)body.confirm_physical=true;state=await api('control','POST',body);$('notice').textContent=state.running?'PHYSICAL MAKET · проверяйте подтверждённое состояние':state.demo_running?'REAL VISION · рекомендации без физического исполнения':'Контроллер остановлен';render();}catch(e){error(e);}finally{render();}};
 $('presentation').onclick=async()=>{document.body.classList.toggle('present');const on=document.body.classList.contains('present');if(on){editing=false;$('road-tools').hidden=true;}draw();prefs.presentation=on;localStorage.setItem('rohai-ui',JSON.stringify(prefs));if(on){try{await document.documentElement.requestFullscreen();}catch{}}else if(document.fullscreenElement)await document.exitFullscreen();};
 $('calibration-open').onclick=async()=>{try{await authorizeSetup(api);config=await api('config');showRoad();}catch(e){error(e);}};
@@ -141,10 +146,118 @@ for(const id of ['pause','stop'])$(id).onclick=()=>control('stop');$('estop').on
 $('mode').onchange=async()=>{const selectedMode=$('mode').value;try{await authorizeSetup(api);config=await api('config');config.output_mode=selectedMode;await api('config','PUT',config);state=await api('state');render();}catch(e){error(e);render();}};
 $('record').onclick=()=>{if(!state.recording?.video&&!confirm('Сохранить локальное видео камеры? На нём могут быть люди и личные данные. Срок хранения задаётся в настройках; удаление выбранного закрытого сеанса требует подтверждения.'))return;control('record');};
 $('replay').onclick=async()=>{try{const items=await api('sessions');$('history').hidden=false;$('sessions').replaceChildren(...items.map(s=>{const row=document.createElement('p'),link=document.createElement('a');link.href='/maket/replay/'+s.id;link.textContent=`${new Date(s.created_at*1000).toLocaleString()} · ${s.mode} · ${s.complete?'полная':'неполная'}${s.expired?' · срок хранения истёк':''}`;row.append(link);if(s.closed){const b=document.createElement('button');b.textContent='Удалить';b.onclick=async()=>{if(!confirm('Безвозвратно удалить выбранный сеанс '+s.id+' и его видео?'))return;try{await authorizeSetup(api);await api('sessions/'+s.id,'DELETE',{confirm_delete:true});$('replay').onclick();}catch(e){error(e);}};row.append(b);}return row;}));if(!items.length)$('sessions').textContent='Записей пока нет.';}catch(e){error(e);}};
-$('revoke').onclick=async()=>{if(!confirm('Отозвать доступ браузера и остановить его активное управление?'))return;try{await api('pair-viewer','DELETE');connected=false;error(Error('Доступ отозван. Нажмите Подключить для нового разрешения.'));}catch(e){error(e);}};
+$('revoke').onclick=async()=>{if(!confirm('Отозвать доступ браузера и остановить его активное управление?'))return;try{await api('pair-viewer','DELETE');localStorage.removeItem('rohai-camera-consent');connected=false;error(Error('Доступ отозван. Нажмите Подключить для нового разрешения.'));}catch(e){error(e);}};
 
 // Keyboard alternative to pointer-only calibration: coordinates are normalized.
 const coordinateTools=document.createElement('div');
 for(const [id,caption,value] of [['point-number','Вершина',1],['point-x','X (0…1)',.5],['point-y','Y (0…1)',.5]]){const label=document.createElement('label'),input=document.createElement('input');input.id=id;input.type='number';input.value=value;input.min=id==='point-number'?1:0;input.max=id==='point-number'?64:1;input.step=id==='point-number'?1:.01;label.append(caption,input);coordinateTools.append(label);}
 for(const [caption,add] of [['Добавить точку с клавиатуры',true],['Изменить вершину',false]]){const b=document.createElement('button');b.textContent=caption;b.onclick=()=>{if(!editing)return;const p={x:Number($('point-x').value),y:Number($('point-y').value)};if(!Number.isFinite(p.x)||!Number.isFinite(p.y)||p.x<0||p.x>1||p.y<0||p.y>1){$('notice').textContent='Координаты должны быть от 0 до 1.';return;}if(add){newPoints??=[];if(newPoints.length<64)newPoints.push(p);}else{const points=newPoints??selectedPoints(),index=Number($('point-number').value)-1;if(!Number.isInteger(index)||!points[index]){$('notice').textContent='Выберите существующую вершину.';return;}Object.assign(points[index],p);}resetReview();draw();};coordinateTools.append(b);}
 $('draw-help').after(coordinateTools);
+const mediaFile = $('media-file');
+const mediaStart = $('media-start');
+const mediaSignalMap = $('media-signal-map');
+let mediaJobId = null;
+let mediaPreviewUrl = null;
+let mediaLastPreviewVersion = null;
+const mediaSeenStages=new Set();
+const mediaStageOrder=['uploading','validating','loading_model','loading_roads','analyzing','finalizing','completed'];
+const mediaStageNames={uploading:'Загрузка файла',validating:'Проверка',loading_model:'Модель',loading_roads:'Модель дорог',analyzing:'Анализ кадров',finalizing:'Формирование результата',completed:'Готово',failed:'Ошибка',cancelled:'Отменено'};
+function setMediaStage(stage,percent=null,status='') {
+ const panel=$('media-progress-panel'),fill=$('media-progress-fill'),track=fill.parentElement,value=$('media-progress-value');
+ panel.hidden=false;
+ if(mediaStageOrder.includes(stage))mediaSeenStages.add(stage);
+ const known=Number.isFinite(Number(percent))&&percent!==null;
+ track.classList.toggle('indeterminate',!known&&stage!=='completed');
+ if(known){const safe=Math.max(0,Math.min(100,Number(percent)));fill.style.width=`${safe}%`;value.textContent=`${Math.round(safe)}%`;track.setAttribute('aria-valuenow',String(Math.round(safe)));}
+ else {fill.style.width=stage==='completed'?'100%':'36%';value.textContent=stage==='completed'?'100%':'В работе';track.removeAttribute('aria-valuenow');}
+ $('media-stage-label').textContent=mediaStageNames[stage]??status??stage;
+ const index=mediaStageOrder.indexOf(stage);
+ $('media-stage-list').replaceChildren(...mediaStageOrder.filter((s)=>mediaSeenStages.has(s)).map((s)=>{const item=document.createElement('span');item.className='media-stage';item.textContent=mediaStageNames[s];if(index>=0&&mediaStageOrder.indexOf(s)<index)item.classList.add('done');if(s===stage)item.classList.add('current');return item;}));
+ if(status)$('media-status').textContent=status;
+}
+function updateMediaTimeline(job){
+ const timeline=$('media-timeline');
+ if(!mediaFile.files?.[0]?.type.startsWith('video/')){timeline.hidden=true;return;}
+ timeline.hidden=false;
+ const duration=Number(job.duration_seconds)||0,current=Math.max(0,Number(job.media_seconds)||0),ratio=duration>0?Math.min(1,current/duration):0;
+ const stamp=(s)=>`${String(Math.floor(s/60)).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+ $('media-timeline-current').textContent=stamp(current);$('media-timeline-total').textContent=duration?stamp(duration):'--:--';
+ $('media-timeline-fill').style.width=`${ratio*100}%`;$('media-timeline-marker').style.left=`${ratio*100}%`;
+}
+async function showMediaSource(file){
+ if(mediaPreviewUrl)URL.revokeObjectURL(mediaPreviewUrl);
+ let blob=file;
+ if(file.type.startsWith('video/')){
+  const video=document.createElement('video');video.muted=true;video.playsInline=true;video.preload='metadata';video.src=URL.createObjectURL(file);
+  try{await new Promise((resolve,reject)=>{video.onloadeddata=resolve;video.onerror=()=>reject(Error('Не удалось прочитать первый кадр видео'));});if(video.readyState<2)await new Promise((resolve)=>video.addEventListener('loadeddata',resolve,{once:true}));
+   const scale=Math.min(1,1280/video.videoWidth),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(video.videoWidth*scale));canvas.height=Math.max(1,Math.round(video.videoHeight*scale));canvas.getContext('2d').drawImage(video,0,0,canvas.width,canvas.height);
+   blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.9));$('media-timeline').hidden=false;$('media-timeline-current').textContent='00:00';$('media-timeline-total').textContent=Number.isFinite(video.duration)?`${String(Math.floor(video.duration/60)).padStart(2,'0')}:${String(Math.floor(video.duration%60)).padStart(2,'0')}`:'--:--';
+  } finally {URL.revokeObjectURL(video.src);video.removeAttribute('src');video.load();}
+ }
+ mediaPreviewUrl=URL.createObjectURL(blob);$('media-preview').src=mediaPreviewUrl;$('media-frame-time').textContent=file.type.startsWith('video/')?'00:00 · FIRST FRAME':'IMAGE INPUT';
+}
+const mediaDirections = [
+ {id:'north',code:'N'},
+ {id:'south',code:'S'},
+ {id:'east',code:'E'},
+ {id:'west',code:'W'},
+];
+const signalCards = new Map();
+for (const direction of mediaDirections) {
+ const column=document.createElement('div');column.className='signal media-signal';column.setAttribute('role','group');column.setAttribute('aria-label',direction.code);
+ const heading=document.createElement('span');heading.textContent=direction.code;
+ const lampNodes={};
+ const lamps=document.createElement('span');lamps.className='media-lamps';
+ for(const color of ['red','yellow','green']){const lamp=document.createElement('i');lamp.className=`lamp ${color}`;lamp.setAttribute('aria-hidden','true');lamps.append(lamp);lampNodes[color]=lamp;}
+ column.append(heading,lamps);mediaSignalMap.append(column);
+ signalCards.set(direction.id,{column,lampNodes});
+}const mediaLabels = {car:'\u043c\u0430\u0448\u0438\u043d\u044b',bus:'\u0430\u0432\u0442\u043e\u0431\u0443\u0441\u044b',truck:'\u0433\u0440\u0443\u0437\u043e\u0432\u0438\u043a\u0438',motorcycle:'\u043c\u043e\u0442\u043e\u0446\u0438\u043a\u043b\u044b',bicycle:'\u0432\u0435\u043b\u043e\u0441\u0438\u043f\u0435\u0434\u044b',pedestrian:'\u043f\u0435\u0448\u0435\u0445\u043e\u0434\u044b',traffic_light:'\u0441\u0432\u0435\u0442\u043e\u0444\u043e\u0440\u044b'};
+mediaFile.onchange = () => { $('media-status').textContent = mediaFile.files?.[0]?.name ?? '\u0424\u0430\u0439\u043b \u043d\u0435 \u0432\u044b\u0431\u0440\u0430\u043d'; mediaStart.disabled = !mediaFile.files?.length; $('media-frame').classList.remove('is-scanning','is-complete'); $('media-progress-panel').hidden=true; $('media-result').hidden=true; $('media-timeline').hidden=true; if(mediaPreviewUrl){URL.revokeObjectURL(mediaPreviewUrl);mediaPreviewUrl=null;} };
+async function mediaRequest(path, options={}) {
+ const response = await fetch(path, {credentials:'same-origin', ...options});
+ if (!response.ok) { let detail = `HTTP ${response.status}`; try { const data = await response.json(); detail = data.error?.message ?? data.detail?.message ?? data.detail ?? detail; } catch {} throw Error(String(detail)); }
+ return response.status === 204 ? null : response.json();
+}
+function renderMediaJob(job) {
+ const labels={uploading:'\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u0444\u0430\u0439\u043b\u0430',validating:'\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u0444\u0430\u0439\u043b\u0430',loading_model:'\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u043c\u043e\u0434\u0435\u043b\u0438 \u0440\u0430\u0441\u043f\u043e\u0437\u043d\u0430\u0432\u0430\u043d\u0438\u044f',loading_roads:'\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u043c\u043e\u0434\u0435\u043b\u0438 \u0434\u043e\u0440\u043e\u0433',analyzing:'\u0410\u043d\u0430\u043b\u0438\u0437 \u043a\u0430\u0434\u0440\u043e\u0432',finalizing:'\u041f\u043e\u0434\u0433\u043e\u0442\u043e\u0432\u043a\u0430 \u043e\u0442\u0447\u0451\u0442\u0430',completed:'\u0410\u043d\u0430\u043b\u0438\u0437 \u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043d',failed:'\u0410\u043d\u0430\u043b\u0438\u0437 \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u043b\u0441\u044f \u043e\u0448\u0438\u0431\u043a\u043e\u0439',cancelled:'\u0410\u043d\u0430\u043b\u0438\u0437 \u043e\u0442\u043c\u0435\u043d\u0451\u043d'};
+ const actualPercent=job.progress_percent!==null&&job.progress_percent!==undefined&&Number.isFinite(Number(job.progress_percent))?Number(job.progress_percent):null;
+ setMediaStage(job.stage,actualPercent,`${labels[job.stage] ?? job.stage}${actualPercent===null?'':` \u00b7 ${Math.round(actualPercent)}%`}${job.error ? ` \u00b7 ${job.error}` : ''}`);
+ updateMediaTimeline(job);
+ if(job.preview_version && job.preview_version!==mediaLastPreviewVersion){mediaLastPreviewVersion=job.preview_version;$('media-preview').src=`/api/maket/video/jobs/${job.id}/preview?v=${job.preview_version}`;$('media-frame-time').textContent=`${$('media-timeline-current').textContent} · ANALYZED FRAME`;}
+ if (job.status !== 'completed') { if(['failed','cancelled'].includes(job.status)){$('media-frame').classList.remove('is-scanning');$('media-result').hidden=false;} return; }
+ const geometry=job.road_geometry ?? {};
+ const roads=geometry.approaches?.length ? geometry.approaches.map(d=>({north:'\u0441\u0435\u0432\u0435\u0440',south:'\u044e\u0433',east:'\u0432\u043e\u0441\u0442\u043e\u043a',west:'\u0437\u0430\u043f\u0430\u0434'}[d] ?? d)).join(', ') : '\u043f\u043e\u0434\u044a\u0435\u0437\u0434\u044b \u043d\u0435 \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u044b';
+ $('media-geometry').textContent = `\u0413\u0435\u043e\u043c\u0435\u0442\u0440\u0438\u044f: ${geometry.intersection_detected ? '\u043f\u0435\u0440\u0435\u043a\u0440\u0451\u0441\u0442\u043e\u043a' : '\u043f\u0435\u0440\u0435\u043a\u0440\u0451\u0441\u0442\u043e\u043a \u043d\u0435 \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043d'} \u00b7 \u043f\u043e\u0434\u044a\u0435\u0437\u0434\u044b: ${roads} \u00b7 \u043f\u043e\u043b\u043e\u0441\u044b: ${geometry.lane_count ?? '\u043d\u0435 \u043e\u043f\u0440\u0435\u0434\u0435\u043b\u0435\u043d\u044b'}${geometry.confidence != null ? ` \u00b7 \u0443\u0432\u0435\u0440\u0435\u043d\u043d\u043e\u0441\u0442\u044c \u0444\u043e\u0440\u043c\u044b ${Math.round(geometry.confidence*100)}%` : ''}`;
+ $('media-counts').textContent = `\u041e\u0431\u044a\u0435\u043a\u0442\u044b: ${Object.entries(job.counts ?? {}).map(([k,v])=>`${mediaLabels[k]??k}: ${v}`).join(' \u00b7 ') || '\u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u044b'} \u00b7 \u0443\u043d\u0438\u043a\u0430\u043b\u044c\u043d\u044b\u0435 \u0442\u0440\u0435\u043a\u0438: ${job.unique_tracks ?? 0}`;
+ const signals=job.signal_recommendation?.signals ?? {};
+ $('media-signals').textContent = `\u0420\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0430\u0446\u0438\u044f \u043f\u043e \u043d\u0430\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u044f\u043c: ${['north','south','east','west'].map((d)=>`${({north:'\u0421\u0435\u0432\u0435\u0440',south:'\u042e\u0433',east:'\u0412\u043e\u0441\u0442\u043e\u043a',west:'\u0417\u0430\u043f\u0430\u0434'})[d]} \u2014 ${{green:'\u0437\u0435\u043b\u0451\u043d\u044b\u0439',yellow:'\u0436\u0451\u043b\u0442\u044b\u0439',red:'\u043a\u0440\u0430\u0441\u043d\u044b\u0439'}[signals[d]?.vehicles] ?? '\u043d\u0435 \u043e\u043f\u0440\u0435\u0434\u0435\u043b\u0451\u043d'}`).join(' \u00b7 ')}`;
+ for(const [direction,view] of signalCards){
+  const signal=signals[direction]??{};const color=['red','yellow','green'].includes(signal.vehicles)?signal.vehicles:null;
+  for(const [lamp,node] of Object.entries(view.lampNodes))node.classList.toggle('on',lamp===color);
+  view.column.dataset.signal=color??'unknown';
+  view.column.setAttribute('aria-label',`${({north:'Север',south:'Юг',east:'Восток',west:'Запад'})[direction]}: ${{green:'зелёный',yellow:'жёлтый',red:'красный'}[color]??'сигнал не определён'}`);
+ } const reasoning=[...(job.explanations ?? [])];
+ if(job.signal_recommendation?.reason) reasoning.push({stage:'signals',text:job.signal_recommendation.reason});
+ if(!geometry.lane_count) reasoning.push({stage:'geometry',text:geometry.reason ?? 'Число полос не измерено: нужна модель разметки или проверенная калибровка.'});
+ $('media-reasoning').replaceChildren(...reasoning.map((step)=>{const li=document.createElement('li');li.textContent=`${step.stage}: ${step.text}`;return li;}));
+ $('media-result').hidden=false;$('media-frame').classList.remove('is-scanning');$('media-frame').classList.add('is-complete');
+}
+mediaStart.onclick = async () => {
+ const file=mediaFile.files?.[0]; if(!file||mediaJobId)return;
+ mediaLastPreviewVersion=null;mediaSeenStages.clear();mediaStart.disabled=true;$('media-frame').classList.remove('is-complete');$('media-frame').classList.add('is-scanning');$('media-result').hidden=false;$('media-geometry').textContent='';$('media-counts').textContent='';$('media-signals').textContent='';$('media-reasoning').replaceChildren();for(const view of signalCards.values())for(const lamp of Object.values(view.lampNodes))lamp.classList.remove('on');setMediaStage('uploading',null,'Подготовка файла…');
+ try {
+  try{await showMediaSource(file);}catch(previewError){$('media-status').textContent=`Файл отправляется на анализ; предварительный кадр не удалось показать: ${previewError.message}`;}
+  if(file.type.startsWith('video/'))$('media-frame-time').textContent='00:00 · FIRST FRAME';
+  await authorizeSetup(api);
+  setMediaStage('uploading',null,'Отправка файла для анализа…');
+  const params=new URLSearchParams({filename:file.name,profile:$('media-profile').value,roads:String($('media-roads').checked)});
+  const job=await mediaRequest(`/api/maket/video/jobs?${params}`,{method:'POST',headers:{'Content-Type':file.type||'application/octet-stream'},body:file});
+  mediaJobId=job.id;
+  for (;;) {
+   const current=await mediaRequest(`/api/maket/video/jobs/${mediaJobId}`); renderMediaJob(current);
+   if(['completed','failed','cancelled'].includes(current.status)) break;
+   await new Promise(resolve=>setTimeout(resolve,900));
+  }
+ } catch (error) { $('media-status').textContent=`\u041e\u0448\u0438\u0431\u043a\u0430 \u0430\u043d\u0430\u043b\u0438\u0437\u0430: ${error.message}`;$('media-frame').classList.remove('is-scanning');$('media-result').hidden=false;$('media-stage-label').textContent='Ошибка анализа';$('media-progress-value').textContent='';$('media-progress-fill').style.width='0';$('media-progress-fill').parentElement.classList.remove('indeterminate'); }
+ finally { mediaJobId=null; mediaStart.disabled=!mediaFile.files?.length; }
+};
