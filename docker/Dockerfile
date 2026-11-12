@@ -5,7 +5,7 @@ RUN npm ci --no-audit --no-fund
 COPY apps/dashboard ./
 RUN npm run build
 
-FROM python:3.12-slim
+FROM python:3.15-slim
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 COPY apps/backend apps/backend
